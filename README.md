@@ -40,4 +40,8 @@ O **MemoryWord** é um aplicativo móvel de alta performance desenvolvido de rai
 1. Certifica-te de que tens o **Flutter SDK** e o **Android Studio** instalados no teu computador.
 2. Clona este repositório:
    ```bash
+<<<<<<< HEAD
    git clone [https://github.com/Pedrodinix/memory_word.git](https://github.com/Pedrodinix/memory_word.git)
+=======
+   git clone [https://github.com/Pedrodinix/memory_word.git](https://github.com/Pedrodinix/memory_word.git)
+>>>>>>> e3a9ceb630f2047783ffc81039e112ee44a98da8
