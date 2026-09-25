@@ -4,29 +4,51 @@ import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:translator/translator.dart' as tr;
-import 'package:flutter_tts/flutter_tts.dart'; // <-- IMPORTAÇÃO DO ÁUDIO
+import 'package:flutter_tts/flutter_tts.dart';
 import 'dart:io';
 import 'dart:math';
 
-// Variável global para controlar o tema em tempo real
+// ==========================================
+// CONFIGURAÇÕES DE IDIOMAS SUPORTADOS
+// ==========================================
+class AppLanguage {
+  final String name;
+  final String flag;
+  final String ttsCode;
+  final String transCode;
+  const AppLanguage(this.name, this.flag, this.ttsCode, this.transCode);
+}
+
+const Map<String, AppLanguage> supportedLanguages = {
+  'Inglês': AppLanguage('Inglês', '🇺🇸', 'en-US', 'en'),
+  'Alemão': AppLanguage('Alemão', '🇩🇪', 'de-DE', 'de'),
+  'Espanhol': AppLanguage('Espanhol', '🇪🇸', 'es-ES', 'es'),
+  'Português': AppLanguage('Português', '🇧🇷', 'pt-BR', 'pt'),
+  'Francês': AppLanguage('Francês', '🇫🇷', 'fr-FR', 'fr'),
+};
+
+// Variáveis globais para controlar tema e idioma em tempo real
 final ValueNotifier<ThemeMode> appThemeMode = ValueNotifier(ThemeMode.light);
+final ValueNotifier<String> appLanguage = ValueNotifier('Inglês');
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // LER A CONFIGURAÇÃO SALVA ANTES DE INICIAR O APP
-  String temaSalvo = await DatabaseHelper.instance.getConfig('tema');
-  if (temaSalvo == 'dark') {
-    appThemeMode.value = ThemeMode.dark;
-  } else {
-    appThemeMode.value = ThemeMode.light;
+  // LER AS CONFIGURAÇÕES SALVAS ANTES DE INICIAR O APP
+  final db = DatabaseHelper.instance;
+  String temaSalvo = await db.getConfig('tema');
+  String idiomaSalvo = await db.getConfig('idioma_atual');
+
+  appThemeMode.value = (temaSalvo == 'dark') ? ThemeMode.dark : ThemeMode.light;
+  if (idiomaSalvo.isNotEmpty && supportedLanguages.containsKey(idiomaSalvo)) {
+    appLanguage.value = idiomaSalvo;
   }
 
   runApp(const MemoryWordApp());
 }
 
 // ==========================================
-// BANCO DE DADOS
+// BANCO DE DADOS (Com Proteção e Verificação Forçada)
 // ==========================================
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
@@ -35,9 +57,32 @@ class DatabaseHelper {
   DatabaseHelper._init();
 
   Future<Database> get database async {
-    if (_database != null) return _database!;
+    if (_database != null) {
+      await _checkAndUpgradeSchema(_database!);
+      return _database!;
+    }
     _database = await _initDB('dicionario.db');
+    await _checkAndUpgradeSchema(_database!);
     return _database!;
+  }
+
+  // NOVA PROTEÇÃO: Força a criação das colunas caso o onUpgrade tenha falhado no cache do celular
+  Future<void> _checkAndUpgradeSchema(Database db) async {
+    try {
+      var tableInfo = await db.rawQuery("PRAGMA table_info(palavras)");
+      bool hasLingua = tableInfo.any((col) => col['name'] == 'lingua');
+
+      if (!hasLingua) {
+        await db.execute("ALTER TABLE palavras ADD COLUMN lingua TEXT DEFAULT 'Inglês'");
+      }
+
+      var configInfo = await db.rawQuery("PRAGMA table_info(configuracoes)");
+      if (configInfo.isNotEmpty) {
+        await db.insert('configuracoes', {'chave': 'idioma_atual', 'valor': 'Inglês'}, conflictAlgorithm: ConflictAlgorithm.ignore);
+      }
+    } catch (e) {
+      debugPrint("Erro na verificação de schema: $e");
+    }
   }
 
   Future<Database> _initDB(String filePath) async {
@@ -46,14 +91,15 @@ class DatabaseHelper {
 
     return await openDatabase(
       fullPath,
-      version: 2,
+      version: 3,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE palavras (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             ingles TEXT NOT NULL,
             traducao TEXT NOT NULL,
-            imagem TEXT
+            imagem TEXT,
+            lingua TEXT NOT NULL DEFAULT 'Inglês'
           )
         ''');
         await db.execute('''
@@ -62,21 +108,25 @@ class DatabaseHelper {
             valor TEXT
           )
         ''');
-        await db.insert('configuracoes', {'chave': 'filtro', 'valor': 'todas'}, conflictAlgorithm: ConflictAlgorithm.replace);
-        await db.insert('configuracoes', {'chave': 'custom_val', 'valor': ''}, conflictAlgorithm: ConflictAlgorithm.replace);
-        await db.insert('configuracoes', {'chave': 'tema', 'valor': 'light'}, conflictAlgorithm: ConflictAlgorithm.replace);
+        await db.insert('configuracoes', {'chave': 'filtro', 'valor': 'todas'});
+        await db.insert('configuracoes', {'chave': 'custom_val', 'valor': ''});
+        await db.insert('configuracoes', {'chave': 'tema', 'valor': 'light'});
+        await db.insert('configuracoes', {'chave': 'idioma_atual', 'valor': 'Inglês'});
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
-          await db.execute('''
-            CREATE TABLE IF NOT EXISTS configuracoes (
-              chave TEXT PRIMARY KEY,
-              valor TEXT
-            )
-          ''');
+          await db.execute('CREATE TABLE IF NOT EXISTS configuracoes (chave TEXT PRIMARY KEY, valor TEXT)');
           await db.insert('configuracoes', {'chave': 'filtro', 'valor': 'todas'}, conflictAlgorithm: ConflictAlgorithm.replace);
           await db.insert('configuracoes', {'chave': 'custom_val', 'valor': ''}, conflictAlgorithm: ConflictAlgorithm.replace);
           await db.insert('configuracoes', {'chave': 'tema', 'valor': 'light'}, conflictAlgorithm: ConflictAlgorithm.replace);
+        }
+        if (oldVersion < 3) {
+          try {
+            await db.execute("ALTER TABLE palavras ADD COLUMN lingua TEXT DEFAULT 'Inglês'");
+          } catch (e) {
+            // Ignora se já existir
+          }
+          await db.insert('configuracoes', {'chave': 'idioma_atual', 'valor': 'Inglês'}, conflictAlgorithm: ConflictAlgorithm.replace);
         }
       },
     );
@@ -105,15 +155,14 @@ class DatabaseHelper {
     await db.insert('palavras', row, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
-  Future<List<Map<String, dynamic>>> fetchWordsForPractice() async {
+  Future<List<Map<String, dynamic>>> fetchWordsForPractice(String linguaAtual) async {
     final db = await instance.database;
     String filtro = await getConfig('filtro');
 
     int limit = -1;
     if (filtro != 'todas') {
       if (filtro == 'custom') {
-        String customVal = await getConfig('custom_val');
-        limit = int.tryParse(customVal) ?? -1;
+        limit = int.tryParse(await getConfig('custom_val')) ?? -1;
       } else {
         limit = int.tryParse(filtro) ?? -1;
       }
@@ -124,18 +173,20 @@ class DatabaseHelper {
              GROUP_CONCAT(traducao, '|') as traducoes, 
              MAX(imagem) as imagem
       FROM palavras
+      WHERE lingua = ?
       GROUP BY ingles COLLATE NOCASE
       ORDER BY MAX(id) DESC
     ''';
 
     if (limit > 0) {
       query += ' LIMIT $limit';
+      return await db.rawQuery(query, [linguaAtual]);
+    } else {
+      return await db.rawQuery(query, [linguaAtual]);
     }
-
-    return await db.rawQuery(query);
   }
 
-  Future<List<Map<String, dynamic>>> fetchDistinctWords([String query = '']) async {
+  Future<List<Map<String, dynamic>>> fetchDistinctWords(String linguaAtual, [String query = '']) async {
     final db = await instance.database;
     if (query.isEmpty) {
       return await db.rawQuery('''
@@ -143,35 +194,36 @@ class DatabaseHelper {
                MAX(imagem) as imagem, 
                GROUP_CONCAT(traducao, ', ') as traducao 
         FROM palavras 
+        WHERE lingua = ?
         GROUP BY ingles COLLATE NOCASE 
         ORDER BY ingles COLLATE NOCASE ASC
-      ''');
+      ''', [linguaAtual]);
     } else {
       return await db.rawQuery('''
         SELECT ingles, 
                MAX(imagem) as imagem, 
                GROUP_CONCAT(traducao, ', ') as traducao 
         FROM palavras 
-        WHERE ingles LIKE ? OR traducao LIKE ? 
+        WHERE lingua = ? AND (ingles LIKE ? OR traducao LIKE ?) 
         GROUP BY ingles COLLATE NOCASE 
         ORDER BY ingles COLLATE NOCASE ASC
-      ''', ['%$query%', '%$query%']);
+      ''', [linguaAtual, '%$query%', '%$query%']);
     }
   }
 
-  Future<List<Map<String, dynamic>>> fetchMeanings(String ingles) async {
+  Future<List<Map<String, dynamic>>> fetchMeanings(String ingles, String linguaAtual) async {
     final db = await instance.database;
-    return await db.query('palavras', where: 'ingles = ? COLLATE NOCASE', whereArgs: [ingles]);
+    return await db.query('palavras', where: 'ingles = ? COLLATE NOCASE AND lingua = ?', whereArgs: [ingles, linguaAtual]);
   }
 
-  Future<void> deleteAllMeanings(String ingles) async {
+  Future<void> deleteAllMeanings(String ingles, String linguaAtual) async {
     final db = await instance.database;
-    await db.delete('palavras', where: 'ingles = ? COLLATE NOCASE', whereArgs: [ingles]);
+    await db.delete('palavras', where: 'ingles = ? COLLATE NOCASE AND lingua = ?', whereArgs: [ingles, linguaAtual]);
   }
 }
 
 // ==========================================
-// APLICATIVO PRINCIPAL E TEMA
+// APLICATIVO PRINCIPAL
 // ==========================================
 class MemoryWordApp extends StatelessWidget {
   const MemoryWordApp({super.key});
@@ -203,12 +255,6 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
 
-  final List<Widget> _tabs = [
-    const RegisterTab(),
-    const PracticeTab(),
-    const LibraryTab(),
-  ];
-
   void _abrirConfiguracoes() {
     showModalBottomSheet(
       context: context,
@@ -222,6 +268,17 @@ class _MainScreenState extends State<MainScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: ValueListenableBuilder<String>(
+          valueListenable: appLanguage,
+          builder: (context, lang, child) {
+            return Center(
+              child: Text(
+                supportedLanguages[lang]?.flag ?? '🌐',
+                style: const TextStyle(fontSize: 26),
+              ),
+            );
+          },
+        ),
         title: const Text('MemoryWord'),
         centerTitle: true,
         actions: [
@@ -232,7 +289,17 @@ class _MainScreenState extends State<MainScreen> {
           )
         ],
       ),
-      body: _tabs[_currentIndex],
+      body: ValueListenableBuilder<String>(
+        valueListenable: appLanguage,
+        builder: (context, currentLang, child) {
+          final tabs = [
+            RegisterTab(currentLang: currentLang),
+            PracticeTab(currentLang: currentLang),
+            LibraryTab(currentLang: currentLang),
+          ];
+          return tabs[_currentIndex];
+        },
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (index) => setState(() => _currentIndex = index),
@@ -259,6 +326,7 @@ class SettingsSheet extends StatefulWidget {
 class _SettingsSheetState extends State<SettingsSheet> {
   bool _isDark = false;
   String _filtro = 'todas';
+  String _idiomaSelecionado = 'Inglês';
   final _customCtrl = TextEditingController();
 
   @override
@@ -272,11 +340,13 @@ class _SettingsSheetState extends State<SettingsSheet> {
     final tema = await db.getConfig('tema');
     final filtro = await db.getConfig('filtro');
     final customVal = await db.getConfig('custom_val');
+    final idioma = await db.getConfig('idioma_atual');
 
     setState(() {
       _isDark = tema == 'dark';
       _filtro = filtro.isEmpty ? 'todas' : filtro;
       _customCtrl.text = customVal;
+      _idiomaSelecionado = idioma.isEmpty ? 'Inglês' : idioma;
     });
   }
 
@@ -284,29 +354,27 @@ class _SettingsSheetState extends State<SettingsSheet> {
     if (_filtro == 'custom') {
       int? val = int.tryParse(_customCtrl.text.trim());
       if (val == null || val <= 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Insira um número válido maior que 0 para o filtro personalizado.'))
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Insira um número válido > 0')));
         return;
       }
     }
 
     try {
       final db = DatabaseHelper.instance;
-      String novoTema = _isDark ? 'dark' : 'light';
-
-      await db.updateConfig('tema', novoTema);
+      await db.updateConfig('tema', _isDark ? 'dark' : 'light');
       await db.updateConfig('filtro', _filtro);
       await db.updateConfig('custom_val', _customCtrl.text.trim());
+      await db.updateConfig('idioma_atual', _idiomaSelecionado);
 
       appThemeMode.value = _isDark ? ThemeMode.dark : ThemeMode.light;
+      appLanguage.value = _idiomaSelecionado;
 
       if (!mounted) return;
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Configurações salvas!')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao salvar: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro: $e')));
     }
   }
 
@@ -314,29 +382,40 @@ class _SettingsSheetState extends State<SettingsSheet> {
   Widget build(BuildContext context) {
     return SafeArea(
       child: Padding(
-        padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-            top: 20,
-            left: 20,
-            right: 20
-        ),
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom + 20, top: 20, left: 20, right: 20),
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              const Text("Idioma de Estudo", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                value: _idiomaSelecionado,
+                decoration: const InputDecoration(border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 10)),
+                items: supportedLanguages.keys.map((lang) {
+                  return DropdownMenuItem(
+                    value: lang,
+                    child: Text("${supportedLanguages[lang]!.flag} Aprender $lang"),
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  if (val != null) setState(() => _idiomaSelecionado = val);
+                },
+              ),
+              const Divider(height: 30),
               const Text("Aparência", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               SwitchListTile(
                 title: const Text("Modo Noturno"),
                 value: _isDark,
                 onChanged: (val) => setState(() => _isDark = val),
               ),
-              const Divider(),
+              const Divider(height: 30),
               const Text("Filtro de Sorteio (Prática)", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               RadioListTile(title: const Text("Todas as palavras"), value: 'todas', groupValue: _filtro, onChanged: (v) => setState(() => _filtro = v.toString())),
-              RadioListTile(title: const Text("Últimas 10 registadas"), value: '10', groupValue: _filtro, onChanged: (v) => setState(() => _filtro = v.toString())),
-              RadioListTile(title: const Text("Últimas 20 registadas"), value: '20', groupValue: _filtro, onChanged: (v) => setState(() => _filtro = v.toString())),
-              RadioListTile(title: const Text("Últimas 30 registadas"), value: '30', groupValue: _filtro, onChanged: (v) => setState(() => _filtro = v.toString())),
+              RadioListTile(title: const Text("Últimas 10"), value: '10', groupValue: _filtro, onChanged: (v) => setState(() => _filtro = v.toString())),
+              RadioListTile(title: const Text("Últimas 20"), value: '20', groupValue: _filtro, onChanged: (v) => setState(() => _filtro = v.toString())),
+              RadioListTile(title: const Text("Últimas 30"), value: '30', groupValue: _filtro, onChanged: (v) => setState(() => _filtro = v.toString())),
               RadioListTile(title: const Text("Personalizado"), value: 'custom', groupValue: _filtro, onChanged: (v) => setState(() => _filtro = v.toString())),
               if (_filtro == 'custom')
                 Padding(
@@ -362,10 +441,11 @@ class _SettingsSheetState extends State<SettingsSheet> {
 }
 
 // ==========================================
-// ABA 1: REGISTRO (COM BOTÃO DE ÁUDIO)
+// ABA 1: REGISTRO (ADAPTADA COM PROTEÇÃO)
 // ==========================================
 class RegisterTab extends StatefulWidget {
-  const RegisterTab({super.key});
+  final String currentLang;
+  const RegisterTab({super.key, required this.currentLang});
 
   @override
   State<RegisterTab> createState() => _RegisterTabState();
@@ -378,11 +458,12 @@ class _RegisterTabState extends State<RegisterTab> {
   bool _isTranslating = false;
 
   final ImagePicker _picker = ImagePicker();
-  final FlutterTts _flutterTts = FlutterTts(); // Instância do Leitor de Voz
+  final FlutterTts _flutterTts = FlutterTts();
 
   Future<void> _falar(String texto) async {
     if (texto.isEmpty) return;
-    await _flutterTts.setLanguage("en-US"); // Define o sotaque para Inglês
+    AppLanguage langData = supportedLanguages[widget.currentLang]!;
+    await _flutterTts.setLanguage(langData.ttsCode);
     await _flutterTts.speak(texto);
   }
 
@@ -390,8 +471,9 @@ class _RegisterTabState extends State<RegisterTab> {
     if (_inglesCtrl.text.isEmpty) return;
     setState(() => _isTranslating = true);
     try {
+      AppLanguage langData = supportedLanguages[widget.currentLang]!;
       final translator = tr.GoogleTranslator();
-      final translation = await translator.translate(_inglesCtrl.text.trim(), from: 'en', to: 'pt');
+      final translation = await translator.translate(_inglesCtrl.text.trim(), from: langData.transCode, to: 'pt');
       setState(() => _traducaoCtrl.text = translation.text);
     } catch (e) {
       if (!mounted) return;
@@ -411,40 +493,52 @@ class _RegisterTabState extends State<RegisterTab> {
   }
 
   Future<void> _saveWord() async {
-    if (_inglesCtrl.text.isEmpty || _traducaoCtrl.text.isEmpty) return;
-
-    final db = DatabaseHelper.instance;
-    final ex = await db.fetchMeanings(_inglesCtrl.text.trim());
-
-    if (ex.isNotEmpty) {
-      if (!mounted) return;
-      bool? addAnother = await showDialog<bool>(
-          context: context,
-          builder: (c) => AlertDialog(
-            title: const Text("Palavra Existente"),
-            content: const Text("Esta palavra já existe na biblioteca. Deseja adicionar este novo significado a ela?"),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(c, false), child: const Text("Cancelar")),
-              FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text("Sim")),
-            ],
-          )
-      );
-      if (addAnother != true) return;
+    // Nova Proteção Visual: Evita clique vazio
+    if (_inglesCtrl.text.trim().isEmpty || _traducaoCtrl.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Preencha a palavra e a tradução antes de salvar.')));
+      return;
     }
 
-    await db.insertWord({
-      'ingles': _inglesCtrl.text.trim(),
-      'traducao': _traducaoCtrl.text.trim(),
-      'imagem': _imageFile?.path ?? '',
-    });
+    try {
+      final db = DatabaseHelper.instance;
+      final ex = await db.fetchMeanings(_inglesCtrl.text.trim(), widget.currentLang);
 
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Palavra salva com sucesso!')));
-    setState(() {
-      _inglesCtrl.clear();
-      _traducaoCtrl.clear();
-      _imageFile = null;
-    });
+      if (ex.isNotEmpty) {
+        if (!mounted) return;
+        bool? addAnother = await showDialog<bool>(
+            context: context,
+            builder: (c) => AlertDialog(
+              title: const Text("Palavra Existente"),
+              content: const Text("Esta palavra já existe na biblioteca desta língua. Deseja adicionar este novo significado a ela?"),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(c, false), child: const Text("Cancelar")),
+                FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text("Sim")),
+              ],
+            )
+        );
+        if (addAnother != true) return;
+      }
+
+      await db.insertWord({
+        'ingles': _inglesCtrl.text.trim(),
+        'traducao': _traducaoCtrl.text.trim(),
+        'imagem': _imageFile?.path ?? '',
+        'lingua': widget.currentLang,
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Palavra salva com sucesso!'), backgroundColor: Colors.green));
+      setState(() {
+        _inglesCtrl.clear();
+        _traducaoCtrl.clear();
+        _imageFile = null;
+      });
+
+    } catch (e) {
+      // Nova Proteção Visual: Mostra um erro detalhado na tela caso o banco falhe
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro interno ao salvar: $e'), backgroundColor: Colors.red));
+    }
   }
 
   @override
@@ -458,15 +552,13 @@ class _RegisterTabState extends State<RegisterTab> {
           Row(
             children: [
               Expanded(
-                child: TextField(controller: _inglesCtrl, decoration: const InputDecoration(labelText: 'Palavra em Inglês', border: OutlineInputBorder())),
+                child: TextField(controller: _inglesCtrl, decoration: InputDecoration(labelText: 'Palavra em ${widget.currentLang}', border: const OutlineInputBorder())),
               ),
-              // BOTÃO DE OUVIR (TTS)
               IconButton(
                 icon: const Icon(Icons.volume_up, color: Colors.blue),
                 tooltip: "Ouvir Pronúncia",
                 onPressed: () => _falar(_inglesCtrl.text.trim()),
               ),
-              // BOTÃO DE TRADUZIR
               IconButton(
                   icon: _isTranslating ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.g_translate, color: Colors.blue),
                   tooltip: "Traduzir",
@@ -498,10 +590,11 @@ class _RegisterTabState extends State<RegisterTab> {
 }
 
 // ==========================================
-// ABA 2: PRÁTICA (COM BOTÃO DE ÁUDIO)
+// ABA 2: PRÁTICA (ADAPTADA)
 // ==========================================
 class PracticeTab extends StatefulWidget {
-  const PracticeTab({super.key});
+  final String currentLang;
+  const PracticeTab({super.key, required this.currentLang});
 
   @override
   State<PracticeTab> createState() => _PracticeTabState();
@@ -513,18 +606,19 @@ class _PracticeTabState extends State<PracticeTab> {
   String _resultText = '';
   Color _resultColor = Colors.black;
 
-  final FlutterTts _flutterTts = FlutterTts(); // Instância do Leitor de Voz
+  final FlutterTts _flutterTts = FlutterTts();
 
   Future<void> _falar(String texto) async {
-    await _flutterTts.setLanguage("en-US"); // Define o sotaque para Inglês
+    AppLanguage langData = supportedLanguages[widget.currentLang]!;
+    await _flutterTts.setLanguage(langData.ttsCode);
     await _flutterTts.speak(texto);
   }
 
   Future<void> _drawWord() async {
-    final words = await DatabaseHelper.instance.fetchWordsForPractice();
+    final words = await DatabaseHelper.instance.fetchWordsForPractice(widget.currentLang);
     if (words.isEmpty) {
       setState(() {
-        _resultText = 'Nenhuma palavra atende ao filtro atual.';
+        _resultText = 'Nenhuma palavra de ${widget.currentLang} encontrada.';
         _resultColor = Colors.blue;
       });
       return;
@@ -567,8 +661,6 @@ class _PracticeTabState extends State<PracticeTab> {
         children: [
           FilledButton.icon(icon: const Icon(Icons.shuffle), label: const Text('Sortear Palavra'), onPressed: _drawWord),
           const SizedBox(height: 30),
-
-          // ROW MODIFICADA PARA TER O TEXTO E O BOTÃO DE OUVIR JUNTOS
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -587,7 +679,6 @@ class _PracticeTabState extends State<PracticeTab> {
                 ),
             ],
           ),
-
           const SizedBox(height: 20),
           TextField(
             controller: _answerCtrl,
@@ -612,10 +703,11 @@ class _PracticeTabState extends State<PracticeTab> {
 }
 
 // ==========================================
-// ABA 3: BIBLIOTECA
+// ABA 3: BIBLIOTECA (ADAPTADA)
 // ==========================================
 class LibraryTab extends StatefulWidget {
-  const LibraryTab({super.key});
+  final String currentLang;
+  const LibraryTab({super.key, required this.currentLang});
 
   @override
   State<LibraryTab> createState() => _LibraryTabState();
@@ -632,12 +724,12 @@ class _LibraryTabState extends State<LibraryTab> {
   }
 
   Future<void> _loadWords([String query = '']) async {
-    final words = await DatabaseHelper.instance.fetchDistinctWords(query);
+    final words = await DatabaseHelper.instance.fetchDistinctWords(widget.currentLang, query);
     setState(() => _distinctWords = words);
   }
 
   void _abrirDetalhes(String ingles) async {
-    await Navigator.push(context, MaterialPageRoute(builder: (context) => WordDetailsScreen(ingles: ingles)));
+    await Navigator.push(context, MaterialPageRoute(builder: (context) => WordDetailsScreen(ingles: ingles, currentLang: widget.currentLang)));
     _loadWords(_searchCtrl.text);
   }
 
@@ -647,7 +739,7 @@ class _LibraryTabState extends State<LibraryTab> {
       padding: const EdgeInsets.all(10.0),
       child: Column(
         children: [
-          const Text("Sua Biblioteca", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          Text("Sua Biblioteca em ${widget.currentLang}", style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 10),
           TextField(
             controller: _searchCtrl,
@@ -687,11 +779,12 @@ class _LibraryTabState extends State<LibraryTab> {
 }
 
 // ==========================================
-// TELA DE DETALHES
+// TELA DE DETALHES (ADAPTADA)
 // ==========================================
 class WordDetailsScreen extends StatefulWidget {
   final String ingles;
-  const WordDetailsScreen({super.key, required this.ingles});
+  final String currentLang;
+  const WordDetailsScreen({super.key, required this.ingles, required this.currentLang});
 
   @override
   State<WordDetailsScreen> createState() => _WordDetailsScreenState();
@@ -707,13 +800,13 @@ class _WordDetailsScreenState extends State<WordDetailsScreen> {
   }
 
   Future<void> _loadMeanings() async {
-    final res = await DatabaseHelper.instance.fetchMeanings(widget.ingles);
+    final res = await DatabaseHelper.instance.fetchMeanings(widget.ingles, widget.currentLang);
     setState(() => _meanings = res);
   }
 
   void _irParaEdicao() async {
-    await Navigator.push(context, MaterialPageRoute(builder: (context) => EditWordScreen(ingles: widget.ingles, meanings: _meanings)));
-    final res = await DatabaseHelper.instance.fetchMeanings(widget.ingles);
+    await Navigator.push(context, MaterialPageRoute(builder: (context) => EditWordScreen(ingles: widget.ingles, meanings: _meanings, currentLang: widget.currentLang)));
+    final res = await DatabaseHelper.instance.fetchMeanings(widget.ingles, widget.currentLang);
     if (res.isEmpty && mounted) {
       Navigator.pop(context);
     } else {
@@ -755,13 +848,14 @@ class _WordDetailsScreenState extends State<WordDetailsScreen> {
 }
 
 // ==========================================
-// TELA DE EDIÇÃO MULTINÍVEL
+// TELA DE EDIÇÃO MULTINÍVEL (ADAPTADA)
 // ==========================================
 class EditWordScreen extends StatefulWidget {
   final String ingles;
   final List<Map<String, dynamic>> meanings;
+  final String currentLang;
 
-  const EditWordScreen({super.key, required this.ingles, required this.meanings});
+  const EditWordScreen({super.key, required this.ingles, required this.meanings, required this.currentLang});
 
   @override
   State<EditWordScreen> createState() => _EditWordScreenState();
@@ -818,7 +912,7 @@ class _EditWordScreenState extends State<EditWordScreen> {
         context: context,
         builder: (c) => AlertDialog(
           title: const Text("Excluir Palavra?"),
-          content: const Text("Deseja apagar esta palavra e TODOS os seus significados?"),
+          content: const Text("Deseja apagar esta palavra e TODOS os seus significados nesta língua?"),
           actions: [
             TextButton(onPressed: () => Navigator.pop(c, false), child: const Text("Cancelar")),
             FilledButton(
@@ -831,7 +925,7 @@ class _EditWordScreenState extends State<EditWordScreen> {
     );
 
     if (conf == true) {
-      await DatabaseHelper.instance.deleteAllMeanings(widget.ingles);
+      await DatabaseHelper.instance.deleteAllMeanings(widget.ingles, widget.currentLang);
       if (!mounted) return;
       Navigator.pop(context);
     }
@@ -840,23 +934,29 @@ class _EditWordScreenState extends State<EditWordScreen> {
   Future<void> _salvarAlteracoes() async {
     if (_inglesCtrl.text.isEmpty) return;
 
-    final db = DatabaseHelper.instance;
-    await db.deleteAllMeanings(widget.ingles);
+    try {
+      final db = DatabaseHelper.instance;
+      await db.deleteAllMeanings(widget.ingles, widget.currentLang);
 
-    for (var m in _editMeanings) {
-      String tradText = (m['traducao'] as TextEditingController).text.trim();
-      if (tradText.isNotEmpty) {
-        await db.insertWord({
-          'ingles': _inglesCtrl.text.trim(),
-          'traducao': tradText,
-          'imagem': m['imagem'],
-        });
+      for (var m in _editMeanings) {
+        String tradText = (m['traducao'] as TextEditingController).text.trim();
+        if (tradText.isNotEmpty) {
+          await db.insertWord({
+            'ingles': _inglesCtrl.text.trim(),
+            'traducao': tradText,
+            'imagem': m['imagem'],
+            'lingua': widget.currentLang,
+          });
+        }
       }
-    }
 
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Alterações salvas!')));
-    Navigator.pop(context);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Alterações salvas!')));
+      Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao salvar: $e'), backgroundColor: Colors.red));
+    }
   }
 
   @override
@@ -870,7 +970,7 @@ class _EditWordScreenState extends State<EditWordScreen> {
             children: [
               TextField(
                 controller: _inglesCtrl,
-                decoration: const InputDecoration(labelText: "Palavra Principal (Inglês)", border: OutlineInputBorder()),
+                decoration: InputDecoration(labelText: "Palavra Principal (${widget.currentLang})", border: const OutlineInputBorder()),
                 style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 15),
