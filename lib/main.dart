@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Para a Vibração (HapticFeedback)
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
@@ -6,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:translator/translator.dart' as tr;
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:audioplayers/audioplayers.dart'; // Para o Som de Acerto
 import 'dart:io';
 import 'dart:math';
 
@@ -198,7 +200,7 @@ class DatabaseHelper {
 }
 
 // ==========================================
-// APLICATIVO PRINCIPAL E NAVEGAÇÃO PRINCIPAL (ARRASTAR LATERAL)
+// APLICATIVO PRINCIPAL E NAVEGAÇÃO
 // ==========================================
 class MemoryWordApp extends StatelessWidget {
   const MemoryWordApp({super.key});
@@ -269,7 +271,6 @@ class _MainScreenState extends State<MainScreen> {
           IconButton(icon: const Icon(Icons.settings), tooltip: "Configurações", onPressed: _abrirConfiguracoes)
         ],
       ),
-      // Substituído IndexedStack por PageView Horizontal (Permite deslizar entre abas principais)
       body: ValueListenableBuilder<String>(
         valueListenable: appLanguage,
         builder: (context, currentLang, child) {
@@ -300,7 +301,7 @@ class _MainScreenState extends State<MainScreen> {
 }
 
 // ==========================================
-// ABA 2: PRÁTICA (TRÊS NÍVEIS DE ROLAGEM VERTICAL)
+// ABA 2: PRÁTICA (TRÊS NÍVEIS) COM FEEDBACK SONORO E TÁTIL
 // ==========================================
 class PracticeTab extends StatefulWidget {
   final String currentLang;
@@ -314,6 +315,9 @@ class _PracticeTabState extends State<PracticeTab> {
   final PageController _pageController = PageController(initialPage: 0);
   final FlutterTts _flutterTts = FlutterTts();
   late stt.SpeechToText _speech;
+
+  // Toca o som de acerto
+  final AudioPlayer _audioPlayer = AudioPlayer();
 
   // Variáveis do Modo Normal
   Map<String, dynamic>? _currentWordNormal;
@@ -380,11 +384,21 @@ class _PracticeTabState extends State<PracticeTab> {
   void dispose() {
     _isParrotPlaying = false;
     _flutterTts.stop();
+    _audioPlayer.dispose(); // Limpa o leitor de som
     _pageController.dispose();
     _parrotCustomCtrl.dispose();
     _sharpCustomCtrl.dispose();
     _answerCtrl.dispose();
     super.dispose();
+  }
+
+  // --- Função para tocar o Plim de Acerto ---
+  Future<void> _playCorrectSound() async {
+    try {
+      await _audioPlayer.play(AssetSource('correct.mp3'));
+    } catch (e) {
+      debugPrint("Ficheiro de som correct.mp3 não encontrado na pasta assets.");
+    }
   }
 
   Future<void> _falar(String texto, {double rate = 0.5}) async {
@@ -394,7 +408,6 @@ class _PracticeTabState extends State<PracticeTab> {
     await _flutterTts.speak(texto);
   }
 
-  // Setinhas minúsculas encostadas às margens
   Widget _buildMinimalArrow(IconData icon, String text, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
@@ -435,10 +448,12 @@ class _PracticeTabState extends State<PracticeTab> {
       if (correctAnswers.contains(userAnswer)) {
         _resultTextNormal = 'Resposta Correta! 🎉';
         _resultColorNormal = Colors.green;
+        _playCorrectSound(); // Toca o Plim!
       } else {
         final displayCorrect = _currentWordNormal!['traducoes'].toString().replaceAll('|', ' ou ');
         _resultTextNormal = 'Incorreta. O correto é: $displayCorrect';
         _resultColorNormal = Colors.red;
+        HapticFeedback.heavyImpact(); // Vibração de erro!
       }
     });
   }
@@ -561,7 +576,6 @@ class _PracticeTabState extends State<PracticeTab> {
 
   void _listenSharp() async {
     if (!_isListening) {
-      // Agora pedirá permissão formalmente e enviará os status
       bool available = await _speech.initialize(
         onStatus: (val) {
           if (val == 'notListening' || val == 'done') {
@@ -612,15 +626,15 @@ class _PracticeTabState extends State<PracticeTab> {
       if (spoken == target || spoken.contains(target) || target.contains(spoken)) {
         _sharpResultText = 'Pronúncia Perfeita! 🎉';
         _sharpResultColor = Colors.green;
+        _playCorrectSound(); // Toca o Plim!
       } else {
         _sharpResultText = 'Tente novamente. Entendemos: "$spoken"';
         _sharpResultColor = Colors.red;
+        HapticFeedback.heavyImpact(); // Vibração de erro!
       }
     });
   }
 
-
-  // --- Construção da Interface Dividida ---
   @override
   Widget build(BuildContext context) {
     return PageView(
@@ -738,7 +752,6 @@ class _PracticeTabState extends State<PracticeTab> {
                   const Row(mainAxisAlignment: MainAxisAlignment.center, children: [ Text('🗡️', style: TextStyle(fontSize: 30)), SizedBox(width: 10), Text('Língua Afiada', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)) ]),
                   const Divider(height: 15),
 
-                  // Filtro corrigido em coluna para não espremer
                   DropdownButtonFormField<String>(
                       decoration: const InputDecoration(labelText: 'Filtro de Sorteio', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 12), isDense: true),
                       value: _sharpFilter,
@@ -772,11 +785,10 @@ class _PracticeTabState extends State<PracticeTab> {
                   Text(_sharpResultText, style: TextStyle(fontSize: 18, color: _sharpResultColor, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
                   const SizedBox(height: 20),
 
-                  // Botão de Microfone muito menor
                   GestureDetector(
                     onTap: _currentWordSharp == null ? null : _listenSharp,
                     child: CircleAvatar(
-                      radius: 35, // Tamanho reduzido para evitar transbordamento
+                      radius: 35,
                       backgroundColor: _currentWordSharp == null ? Colors.grey : (_isListening ? Colors.red : Colors.blue),
                       child: Icon(_isListening ? Icons.mic : Icons.mic_none, size: 35, color: Colors.white),
                     ),

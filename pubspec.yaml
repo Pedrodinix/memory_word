@@ -18,6 +18,7 @@ dependencies:
   translator: ^0.1.7
   flutter_tts: ^4.2.5
   speech_to_text: ^7.5.0
+  audioplayers: ^6.8.1
 
 dev_dependencies:
   flutter_test:
@@ -27,6 +28,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/correct.mp3
 
 flutter_launcher_icons:
   android: "launcher_icon"
