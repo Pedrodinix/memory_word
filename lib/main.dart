@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // Para a Vibração (HapticFeedback)
+import 'package:flutter/services.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
@@ -7,7 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:translator/translator.dart' as tr;
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
-import 'package:audioplayers/audioplayers.dart'; // Para o Som de Acerto
+import 'package:audioplayers/audioplayers.dart';
 import 'dart:io';
 import 'dart:math';
 
@@ -30,8 +30,10 @@ const Map<String, AppLanguage> supportedLanguages = {
   'Francês': AppLanguage('Francês', '🇫🇷', 'fr-FR', 'fr'),
 };
 
+// Variáveis Globais (Agora incluem o Feedback de Som/Vibração)
 final ValueNotifier<ThemeMode> appThemeMode = ValueNotifier(ThemeMode.light);
 final ValueNotifier<String> appLanguage = ValueNotifier('Inglês');
+final ValueNotifier<bool> appFeedbackEnabled = ValueNotifier(true);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,10 +41,14 @@ void main() async {
   final db = DatabaseHelper.instance;
   String temaSalvo = await db.getConfig('tema');
   String idiomaSalvo = await db.getConfig('idioma_atual');
+  String feedbackSalvo = await db.getConfig('feedback_ativo');
 
   appThemeMode.value = (temaSalvo == 'dark') ? ThemeMode.dark : ThemeMode.light;
   if (idiomaSalvo.isNotEmpty && supportedLanguages.containsKey(idiomaSalvo)) {
     appLanguage.value = idiomaSalvo;
+  }
+  if (feedbackSalvo.isNotEmpty) {
+    appFeedbackEnabled.value = (feedbackSalvo == 'true');
   }
 
   runApp(const MemoryWordApp());
@@ -75,13 +81,14 @@ class DatabaseHelper {
         await db.execute("ALTER TABLE palavras ADD COLUMN lingua TEXT DEFAULT 'Inglês'");
       }
 
-      List<String> configs = ['idioma_atual', 'papagaio_filtro', 'papagaio_custom_val', 'papagaio_nativo', 'papagaio_modo', 'papagaio_vel', 'afiada_filtro', 'afiada_custom_val'];
+      List<String> configs = ['idioma_atual', 'papagaio_filtro', 'papagaio_custom_val', 'papagaio_nativo', 'papagaio_modo', 'papagaio_vel', 'afiada_filtro', 'afiada_custom_val', 'feedback_ativo'];
       for (String c in configs) {
         String defaultVal = '';
         if (c == 'idioma_atual' || c == 'papagaio_nativo') defaultVal = 'Português';
         if (c == 'papagaio_filtro' || c == 'afiada_filtro') defaultVal = 'todas';
         if (c == 'papagaio_modo') defaultVal = 'loop';
         if (c == 'papagaio_vel') defaultVal = '1.0';
+        if (c == 'feedback_ativo') defaultVal = 'true';
         await db.insert('configuracoes', {'chave': c, 'valor': defaultVal}, conflictAlgorithm: ConflictAlgorithm.ignore);
       }
     } catch (e) {
@@ -110,6 +117,7 @@ class DatabaseHelper {
         await db.insert('configuracoes', {'chave': 'papagaio_vel', 'valor': '1.0'});
         await db.insert('configuracoes', {'chave': 'afiada_filtro', 'valor': 'todas'});
         await db.insert('configuracoes', {'chave': 'afiada_custom_val', 'valor': ''});
+        await db.insert('configuracoes', {'chave': 'feedback_ativo', 'valor': 'true'});
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -301,7 +309,7 @@ class _MainScreenState extends State<MainScreen> {
 }
 
 // ==========================================
-// ABA 2: PRÁTICA (TRÊS NÍVEIS) COM FEEDBACK SONORO E TÁTIL
+// ABA 2: PRÁTICA
 // ==========================================
 class PracticeTab extends StatefulWidget {
   final String currentLang;
@@ -315,8 +323,6 @@ class _PracticeTabState extends State<PracticeTab> {
   final PageController _pageController = PageController(initialPage: 0);
   final FlutterTts _flutterTts = FlutterTts();
   late stt.SpeechToText _speech;
-
-  // Toca o som de acerto
   final AudioPlayer _audioPlayer = AudioPlayer();
 
   // Variáveis do Modo Normal
@@ -335,7 +341,7 @@ class _PracticeTabState extends State<PracticeTab> {
   bool _isParrotPlaying = false;
   String _parrotCurrentWordDisplay = '';
 
-  // Variáveis do Modo Língua Afiada 🗡️
+  // Variáveis do Modo Língua Afiada
   Map<String, dynamic>? _currentWordSharp;
   String _sharpFilter = 'todas';
   String _sharpCustomVal = '';
@@ -384,7 +390,7 @@ class _PracticeTabState extends State<PracticeTab> {
   void dispose() {
     _isParrotPlaying = false;
     _flutterTts.stop();
-    _audioPlayer.dispose(); // Limpa o leitor de som
+    _audioPlayer.dispose();
     _pageController.dispose();
     _parrotCustomCtrl.dispose();
     _sharpCustomCtrl.dispose();
@@ -392,12 +398,11 @@ class _PracticeTabState extends State<PracticeTab> {
     super.dispose();
   }
 
-  // --- Função para tocar o Plim de Acerto ---
   Future<void> _playCorrectSound() async {
     try {
       await _audioPlayer.play(AssetSource('correct.mp3'));
     } catch (e) {
-      debugPrint("Ficheiro de som correct.mp3 não encontrado na pasta assets.");
+      debugPrint("Ficheiro de som correct.mp3 não encontrado.");
     }
   }
 
@@ -448,12 +453,12 @@ class _PracticeTabState extends State<PracticeTab> {
       if (correctAnswers.contains(userAnswer)) {
         _resultTextNormal = 'Resposta Correta! 🎉';
         _resultColorNormal = Colors.green;
-        _playCorrectSound(); // Toca o Plim!
+        if (appFeedbackEnabled.value) _playCorrectSound();
       } else {
         final displayCorrect = _currentWordNormal!['traducoes'].toString().replaceAll('|', ' ou ');
         _resultTextNormal = 'Incorreta. O correto é: $displayCorrect';
         _resultColorNormal = Colors.red;
-        HapticFeedback.heavyImpact(); // Vibração de erro!
+        if (appFeedbackEnabled.value) HapticFeedback.heavyImpact();
       }
     });
   }
@@ -626,11 +631,11 @@ class _PracticeTabState extends State<PracticeTab> {
       if (spoken == target || spoken.contains(target) || target.contains(spoken)) {
         _sharpResultText = 'Pronúncia Perfeita! 🎉';
         _sharpResultColor = Colors.green;
-        _playCorrectSound(); // Toca o Plim!
+        if (appFeedbackEnabled.value) _playCorrectSound();
       } else {
         _sharpResultText = 'Tente novamente. Entendemos: "$spoken"';
         _sharpResultColor = Colors.red;
-        HapticFeedback.heavyImpact(); // Vibração de erro!
+        if (appFeedbackEnabled.value) HapticFeedback.heavyImpact();
       }
     });
   }
@@ -648,7 +653,6 @@ class _PracticeTabState extends State<PracticeTab> {
     );
   }
 
-  // --- Nível 1: Sorteio Normal ---
   Widget _buildNormalPractice() {
     return Column(
       children: [
@@ -685,7 +689,6 @@ class _PracticeTabState extends State<PracticeTab> {
     );
   }
 
-  // --- Nível 2: Modo Papagaio ---
   Widget _buildParrotPractice() {
     return Column(
       children: [
@@ -738,7 +741,6 @@ class _PracticeTabState extends State<PracticeTab> {
     );
   }
 
-  // --- Nível 3: Modo Língua Afiada 🗡️ ---
   Widget _buildSharpPractice() {
     return Column(
       children: [
@@ -818,6 +820,7 @@ class SettingsSheet extends StatefulWidget {
 
 class _SettingsSheetState extends State<SettingsSheet> {
   bool _isDark = false;
+  bool _isFeedbackEnabled = true; // Novo Estado
   String _filtro = 'todas';
   String _idiomaSelecionado = 'Inglês';
   final _customCtrl = TextEditingController();
@@ -834,12 +837,14 @@ class _SettingsSheetState extends State<SettingsSheet> {
     final filtro = await db.getConfig('filtro');
     final customVal = await db.getConfig('custom_val');
     final idioma = await db.getConfig('idioma_atual');
+    final feedback = await db.getConfig('feedback_ativo'); // Lê o banco de dados
 
     setState(() {
       _isDark = tema == 'dark';
       _filtro = filtro.isEmpty ? 'todas' : filtro;
       _customCtrl.text = customVal;
       _idiomaSelecionado = idioma.isEmpty ? 'Inglês' : idioma;
+      _isFeedbackEnabled = (feedback.isEmpty || feedback == 'true');
     });
   }
 
@@ -858,9 +863,11 @@ class _SettingsSheetState extends State<SettingsSheet> {
       await db.updateConfig('filtro', _filtro);
       await db.updateConfig('custom_val', _customCtrl.text.trim());
       await db.updateConfig('idioma_atual', _idiomaSelecionado);
+      await db.updateConfig('feedback_ativo', _isFeedbackEnabled ? 'true' : 'false'); // Salva
 
       appThemeMode.value = _isDark ? ThemeMode.dark : ThemeMode.light;
       appLanguage.value = _idiomaSelecionado;
+      appFeedbackEnabled.value = _isFeedbackEnabled; // Atualiza a variável global
 
       if (!mounted) return;
       Navigator.pop(context);
@@ -892,8 +899,13 @@ class _SettingsSheetState extends State<SettingsSheet> {
                 onChanged: (val) { if (val != null) setState(() => _idiomaSelecionado = val); },
               ),
               const Divider(height: 30),
-              const Text("Aparência", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+
+              const Text("Preferências", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               SwitchListTile(title: const Text("Modo Noturno"), value: _isDark, onChanged: (val) => setState(() => _isDark = val)),
+
+              // NOVO BOTÃO AQUI!
+              SwitchListTile(title: const Text("Som e Vibração (Feedback)"), value: _isFeedbackEnabled, onChanged: (val) => setState(() => _isFeedbackEnabled = val)),
+
               const Divider(height: 30),
               const Text("Filtro de Sorteio (Prática Normal)", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               RadioListTile(title: const Text("Todas as palavras"), value: 'todas', groupValue: _filtro, onChanged: (v) => setState(() => _filtro = v.toString())),
