@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:translator/translator.dart' as tr;
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt; // NOVA IMPORTAÇÃO
 import 'dart:io';
 import 'dart:math';
 
@@ -73,11 +74,11 @@ class DatabaseHelper {
         await db.execute("ALTER TABLE palavras ADD COLUMN lingua TEXT DEFAULT 'Inglês'");
       }
 
-      List<String> configs = ['idioma_atual', 'papagaio_filtro', 'papagaio_custom_val', 'papagaio_nativo', 'papagaio_modo', 'papagaio_vel'];
+      List<String> configs = ['idioma_atual', 'papagaio_filtro', 'papagaio_custom_val', 'papagaio_nativo', 'papagaio_modo', 'papagaio_vel', 'afiada_filtro', 'afiada_custom_val'];
       for (String c in configs) {
         String defaultVal = '';
         if (c == 'idioma_atual' || c == 'papagaio_nativo') defaultVal = 'Português';
-        if (c == 'papagaio_filtro') defaultVal = 'todas';
+        if (c == 'papagaio_filtro' || c == 'afiada_filtro') defaultVal = 'todas';
         if (c == 'papagaio_modo') defaultVal = 'loop';
         if (c == 'papagaio_vel') defaultVal = '1.0';
         await db.insert('configuracoes', {'chave': c, 'valor': defaultVal}, conflictAlgorithm: ConflictAlgorithm.ignore);
@@ -93,23 +94,10 @@ class DatabaseHelper {
 
     return await openDatabase(
       fullPath,
-      version: 4,
+      version: 5,
       onCreate: (db, version) async {
-        await db.execute('''
-          CREATE TABLE palavras (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ingles TEXT NOT NULL,
-            traducao TEXT NOT NULL,
-            imagem TEXT,
-            lingua TEXT NOT NULL DEFAULT 'Inglês'
-          )
-        ''');
-        await db.execute('''
-          CREATE TABLE configuracoes (
-            chave TEXT PRIMARY KEY,
-            valor TEXT
-          )
-        ''');
+        await db.execute('''CREATE TABLE palavras (id INTEGER PRIMARY KEY AUTOINCREMENT, ingles TEXT NOT NULL, traducao TEXT NOT NULL, imagem TEXT, lingua TEXT NOT NULL DEFAULT 'Inglês')''');
+        await db.execute('''CREATE TABLE configuracoes (chave TEXT PRIMARY KEY, valor TEXT)''');
         await db.insert('configuracoes', {'chave': 'filtro', 'valor': 'todas'});
         await db.insert('configuracoes', {'chave': 'custom_val', 'valor': ''});
         await db.insert('configuracoes', {'chave': 'tema', 'valor': 'light'});
@@ -119,6 +107,8 @@ class DatabaseHelper {
         await db.insert('configuracoes', {'chave': 'papagaio_nativo', 'valor': 'Português'});
         await db.insert('configuracoes', {'chave': 'papagaio_modo', 'valor': 'loop'});
         await db.insert('configuracoes', {'chave': 'papagaio_vel', 'valor': '1.0'});
+        await db.insert('configuracoes', {'chave': 'afiada_filtro', 'valor': 'todas'});
+        await db.insert('configuracoes', {'chave': 'afiada_custom_val', 'valor': ''});
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -137,6 +127,10 @@ class DatabaseHelper {
           await db.insert('configuracoes', {'chave': 'papagaio_nativo', 'valor': 'Português'}, conflictAlgorithm: ConflictAlgorithm.ignore);
           await db.insert('configuracoes', {'chave': 'papagaio_modo', 'valor': 'loop'}, conflictAlgorithm: ConflictAlgorithm.ignore);
           await db.insert('configuracoes', {'chave': 'papagaio_vel', 'valor': '1.0'}, conflictAlgorithm: ConflictAlgorithm.ignore);
+        }
+        if (oldVersion < 5) {
+          await db.insert('configuracoes', {'chave': 'afiada_filtro', 'valor': 'todas'}, conflictAlgorithm: ConflictAlgorithm.ignore);
+          await db.insert('configuracoes', {'chave': 'afiada_custom_val', 'valor': ''}, conflictAlgorithm: ConflictAlgorithm.ignore);
         }
       },
     );
@@ -173,13 +167,13 @@ class DatabaseHelper {
     return await db.rawQuery(query, [linguaAtual]);
   }
 
-  Future<List<Map<String, dynamic>>> fetchParrotWords(String linguaAtual, String filtro, String customVal) async {
+  Future<List<Map<String, dynamic>>> fetchCustomWords(String linguaAtual, String filtro, String customVal) async {
     final db = await instance.database;
     int limit = -1;
     if (filtro != 'todas') {
       limit = filtro == 'custom' ? (int.tryParse(customVal) ?? -1) : (int.tryParse(filtro) ?? -1);
     }
-    String query = '''SELECT ingles, GROUP_CONCAT(traducao, '|') as traducoes FROM palavras WHERE lingua = ? GROUP BY ingles COLLATE NOCASE ORDER BY MAX(id) DESC''';
+    String query = '''SELECT ingles, GROUP_CONCAT(traducao, '|') as traducoes, MAX(imagem) as imagem FROM palavras WHERE lingua = ? GROUP BY ingles COLLATE NOCASE ORDER BY MAX(id) DESC''';
     if (limit > 0) query += ' LIMIT $limit';
     return await db.rawQuery(query, [linguaAtual]);
   }
@@ -290,7 +284,7 @@ class _MainScreenState extends State<MainScreen> {
 }
 
 // ==========================================
-// ABA 2: PRÁTICA (MODO NORMAL E MODO PAPAGAIO 🦜)
+// ABA 2: PRÁTICA (TRÊS NÍVEIS DE ROLAGEM VERTICAL)
 // ==========================================
 class PracticeTab extends StatefulWidget {
   final String currentLang;
@@ -302,13 +296,14 @@ class PracticeTab extends StatefulWidget {
 
 class _PracticeTabState extends State<PracticeTab> {
   final PageController _pageController = PageController(initialPage: 0);
+  final FlutterTts _flutterTts = FlutterTts();
+  late stt.SpeechToText _speech;
 
   // Variáveis do Modo Normal
-  Map<String, dynamic>? _currentWord;
+  Map<String, dynamic>? _currentWordNormal;
   final _answerCtrl = TextEditingController();
-  String _resultText = '';
-  Color _resultColor = Colors.black;
-  final FlutterTts _flutterTts = FlutterTts();
+  String _resultTextNormal = '';
+  Color _resultColorNormal = Colors.black;
 
   // Variáveis do Modo Papagaio
   String _parrotNativeLang = 'Português';
@@ -317,17 +312,33 @@ class _PracticeTabState extends State<PracticeTab> {
   String _parrotMode = 'loop';
   double _parrotSpeed = 1.0;
   final TextEditingController _parrotCustomCtrl = TextEditingController();
-
   bool _isParrotPlaying = false;
   String _parrotCurrentWordDisplay = '';
+
+  // Variáveis do Modo Língua Afiada 🗡️
+  Map<String, dynamic>? _currentWordSharp;
+  String _sharpFilter = 'todas';
+  String _sharpCustomVal = '';
+  final TextEditingController _sharpCustomCtrl = TextEditingController();
+  bool _isListening = false;
+  String _spokenText = '';
+  String _sharpResultText = '';
+  Color _sharpResultColor = Colors.black;
 
   @override
   void initState() {
     super.initState();
+    _speech = stt.SpeechToText();
     _loadParrotSettings();
+    _loadSharpSettings();
+
     _parrotCustomCtrl.addListener(() {
       _parrotCustomVal = _parrotCustomCtrl.text.trim();
       _saveParrotSettings();
+    });
+    _sharpCustomCtrl.addListener(() {
+      _sharpCustomVal = _sharpCustomCtrl.text.trim();
+      _saveSharpSettings();
     });
   }
 
@@ -340,9 +351,12 @@ class _PracticeTabState extends State<PracticeTab> {
         _flutterTts.stop();
         if (mounted) setState(() {});
       }
-      _currentWord = null;
+      _currentWordNormal = null;
       _answerCtrl.clear();
-      _resultText = '';
+      _resultTextNormal = '';
+      _currentWordSharp = null;
+      _sharpResultText = '';
+      _spokenText = '';
     }
   }
 
@@ -352,65 +366,58 @@ class _PracticeTabState extends State<PracticeTab> {
     _flutterTts.stop();
     _pageController.dispose();
     _parrotCustomCtrl.dispose();
+    _sharpCustomCtrl.dispose();
     _answerCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _falarSorteio(String texto) async {
+  Future<void> _falar(String texto, {double rate = 0.5}) async {
     AppLanguage langData = supportedLanguages[widget.currentLang]!;
     await _flutterTts.setLanguage(langData.ttsCode);
-    await _flutterTts.setSpeechRate(0.5);
+    await _flutterTts.setSpeechRate(rate);
     await _flutterTts.speak(texto);
   }
 
-  Future<void> _drawWord() async {
+  // --- Funções do MODO NORMAL ---
+  Future<void> _drawWordNormal() async {
     final words = await DatabaseHelper.instance.fetchWordsForPractice(widget.currentLang);
     if (words.isEmpty) {
-      setState(() {
-        _resultText = 'Nenhuma palavra de ${widget.currentLang} encontrada.';
-        _resultColor = Colors.blue;
-      });
+      setState(() { _resultTextNormal = 'Sua biblioteca está vazia.'; _resultColorNormal = Colors.blue; });
       return;
     }
     setState(() {
-      _currentWord = words[Random().nextInt(words.length)];
+      _currentWordNormal = words[Random().nextInt(words.length)];
       _answerCtrl.clear();
-      _resultText = '';
+      _resultTextNormal = '';
     });
   }
 
-  void _verifyAnswer() {
-    if (_currentWord == null || _answerCtrl.text.isEmpty) return;
+  void _verifyAnswerNormal() {
+    if (_currentWordNormal == null || _answerCtrl.text.isEmpty) return;
     final userAnswer = _answerCtrl.text.trim().toLowerCase();
-    final List<String> correctAnswers = _currentWord!['traducoes'].toString().split('|').map((e) => e.trim().toLowerCase()).toList();
+    final List<String> correctAnswers = _currentWordNormal!['traducoes'].toString().split('|').map((e) => e.trim().toLowerCase()).toList();
 
     setState(() {
       if (correctAnswers.contains(userAnswer)) {
-        _resultText = 'Resposta Correta! 🎉';
-        _resultColor = Colors.green;
+        _resultTextNormal = 'Resposta Correta! 🎉';
+        _resultColorNormal = Colors.green;
       } else {
-        final displayCorrect = _currentWord!['traducoes'].toString().replaceAll('|', ' ou ');
-        _resultText = 'Incorreta. O correto é: $displayCorrect';
-        _resultColor = Colors.red;
+        final displayCorrect = _currentWordNormal!['traducoes'].toString().replaceAll('|', ' ou ');
+        _resultTextNormal = 'Incorreta. O correto é: $displayCorrect';
+        _resultColorNormal = Colors.red;
       }
     });
   }
 
+  // --- Funções do MODO PAPAGAIO ---
   Future<void> _loadParrotSettings() async {
     final db = DatabaseHelper.instance;
-    String nLang = await db.getConfig('papagaio_nativo');
-    String pFilt = await db.getConfig('papagaio_filtro');
-    String pCust = await db.getConfig('papagaio_custom_val');
-    String pMode = await db.getConfig('papagaio_modo');
-    String pVel = await db.getConfig('papagaio_vel');
-
     setState(() {
-      if (nLang.isNotEmpty) _parrotNativeLang = nLang;
-      if (pFilt.isNotEmpty) _parrotFilter = pFilt;
-      _parrotCustomVal = pCust;
-      _parrotCustomCtrl.text = pCust;
-      if (pMode.isNotEmpty) _parrotMode = pMode;
-      if (pVel.isNotEmpty) _parrotSpeed = double.tryParse(pVel) ?? 1.0;
+      db.getConfig('papagaio_nativo').then((v) { if (v.isNotEmpty) _parrotNativeLang = v; });
+      db.getConfig('papagaio_filtro').then((v) { if (v.isNotEmpty) _parrotFilter = v; });
+      db.getConfig('papagaio_custom_val').then((v) { _parrotCustomVal = v; _parrotCustomCtrl.text = v; });
+      db.getConfig('papagaio_modo').then((v) { if (v.isNotEmpty) _parrotMode = v; });
+      db.getConfig('papagaio_vel').then((v) { if (v.isNotEmpty) _parrotSpeed = double.tryParse(v) ?? 1.0; });
     });
   }
 
@@ -433,35 +440,23 @@ class _PracticeTabState extends State<PracticeTab> {
     }
   }
 
-  // CÓDIGO CORRIGIDO: Sistema de Try/Catch e Remoção do Await para evitar congelamento!
   Future<void> _runParrotLoop() async {
     try {
       _flutterTts.awaitSpeakCompletion(true);
-
       if (Platform.isIOS) {
-        _flutterTts.setIosAudioCategory(
-            IosTextToSpeechAudioCategory.playback,
-            [IosTextToSpeechAudioCategoryOptions.mixWithOthers, IosTextToSpeechAudioCategoryOptions.allowBluetooth]
-        );
+        _flutterTts.setIosAudioCategory(IosTextToSpeechAudioCategory.playback, [IosTextToSpeechAudioCategoryOptions.mixWithOthers, IosTextToSpeechAudioCategoryOptions.allowBluetooth]);
       }
 
       while (_isParrotPlaying) {
-        final rawWords = await DatabaseHelper.instance.fetchParrotWords(widget.currentLang, _parrotFilter, _parrotCustomVal);
-
+        final rawWords = await DatabaseHelper.instance.fetchCustomWords(widget.currentLang, _parrotFilter, _parrotCustomVal);
         if (rawWords.isEmpty) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Sua biblioteca está vazia! Registre palavras antes de usar o Papagaio.'), backgroundColor: Colors.orange)
-            );
-            setState(() {
-              _isParrotPlaying = false;
-              _parrotCurrentWordDisplay = 'Biblioteca Vazia!';
-            });
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sua biblioteca está vazia!'), backgroundColor: Colors.orange));
+            setState(() { _isParrotPlaying = false; _parrotCurrentWordDisplay = 'Biblioteca Vazia!'; });
           }
           break;
         }
 
-        // CORREÇÃO DO ERRO: Criamos uma cópia modificável da lista antes de a baralhar
         final words = List<Map<String, dynamic>>.from(rawWords);
         words.shuffle();
 
@@ -478,7 +473,6 @@ class _PracticeTabState extends State<PracticeTab> {
           await Future.delayed(Duration(milliseconds: (1200 / _parrotSpeed).round()));
 
           if (!_isParrotPlaying) break;
-
           String trad = word['traducoes'].toString().replaceAll('|', ' ou ');
           if (mounted) setState(() => _parrotCurrentWordDisplay = trad);
           AppLanguage nativeLang = supportedLanguages[_parrotNativeLang] ?? supportedLanguages['Português']!;
@@ -489,27 +483,100 @@ class _PracticeTabState extends State<PracticeTab> {
           if (!_isParrotPlaying) break;
           await Future.delayed(Duration(milliseconds: (2000 / _parrotSpeed).round()));
         }
-
         if (_parrotMode == 'single' && _isParrotPlaying) {
-          if (mounted) {
-            setState(() {
-              _isParrotPlaying = false;
-              _parrotCurrentWordDisplay = 'Sequência Concluída!';
-            });
-          }
+          if (mounted) setState(() { _isParrotPlaying = false; _parrotCurrentWordDisplay = 'Sequência Concluída!'; });
           break;
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Erro no motor de voz: $e'), backgroundColor: Colors.red)
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro no motor de voz: $e'), backgroundColor: Colors.red));
         setState(() => _isParrotPlaying = false);
       }
     }
   }
 
+  // --- Funções do MODO LÍNGUA AFIADA 🗡️ ---
+  Future<void> _loadSharpSettings() async {
+    final db = DatabaseHelper.instance;
+    setState(() {
+      db.getConfig('afiada_filtro').then((v) { if (v.isNotEmpty) _sharpFilter = v; });
+      db.getConfig('afiada_custom_val').then((v) { _sharpCustomVal = v; _sharpCustomCtrl.text = v; });
+    });
+  }
+
+  void _saveSharpSettings() {
+    final db = DatabaseHelper.instance;
+    db.updateConfig('afiada_filtro', _sharpFilter);
+    db.updateConfig('afiada_custom_val', _sharpCustomVal);
+  }
+
+  Future<void> _drawWordSharp() async {
+    final words = await DatabaseHelper.instance.fetchCustomWords(widget.currentLang, _sharpFilter, _sharpCustomVal);
+    if (words.isEmpty) {
+      setState(() { _sharpResultText = 'Nenhuma palavra encontrada.'; _sharpResultColor = Colors.blue; });
+      return;
+    }
+    setState(() {
+      _currentWordSharp = words[Random().nextInt(words.length)];
+      _sharpResultText = '';
+      _spokenText = '';
+    });
+    // Fala a palavra automaticamente após o sorteio
+    _falar(_currentWordSharp!['ingles']);
+  }
+
+  void _listenSharp() async {
+    if (!_isListening) {
+      bool available = await _speech.initialize(
+        onStatus: (val) => debugPrint('onStatus: $val'),
+        onError: (val) => debugPrint('onError: $val'),
+      );
+      if (available) {
+        setState(() => _isListening = true);
+        AppLanguage langData = supportedLanguages[widget.currentLang]!;
+        _speech.listen(
+          onResult: (val) {
+            setState(() {
+              _spokenText = val.recognizedWords;
+              if (val.hasConfidenceRating && val.confidence > 0) {
+                _verifySpeech();
+              }
+            });
+          },
+          localeId: langData.ttsCode, // Ouve no idioma selecionado
+        );
+      } else {
+        setState(() => _isListening = false);
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Reconhecimento de voz não disponível no telemóvel.')));
+      }
+    } else {
+      setState(() => _isListening = false);
+      _speech.stop();
+      _verifySpeech();
+    }
+  }
+
+  void _verifySpeech() {
+    if (_currentWordSharp == null || _spokenText.isEmpty) return;
+
+    // Limpa a string tirando pontuações e pondo em minúsculo para comparar melhor
+    String target = _currentWordSharp!['ingles'].toString().toLowerCase().replaceAll(RegExp(r'[^\w\s]+'), '');
+    String spoken = _spokenText.toLowerCase().replaceAll(RegExp(r'[^\w\s]+'), '');
+
+    setState(() {
+      if (spoken == target || spoken.contains(target) || target.contains(spoken)) {
+        _sharpResultText = 'Pronúncia Perfeita! 🎉';
+        _sharpResultColor = Colors.green;
+      } else {
+        _sharpResultText = 'Tente novamente. Entendemos: "$spoken"';
+        _sharpResultColor = Colors.red;
+      }
+    });
+  }
+
+
+  // --- Construção da Interface Dividida em 3 Níveis ---
   @override
   Widget build(BuildContext context) {
     return PageView(
@@ -518,48 +585,42 @@ class _PracticeTabState extends State<PracticeTab> {
       children: [
         _buildNormalPractice(),
         _buildParrotPractice(),
+        _buildSharpPractice(), // NOVA ABA
       ],
     );
   }
 
+  // --- Nível 1: Sorteio Normal ---
   Widget _buildNormalPractice() {
     return Padding(
       padding: const EdgeInsets.all(20.0),
       child: Column(
         children: [
-          FilledButton.icon(icon: const Icon(Icons.shuffle), label: const Text('Sortear Palavra'), onPressed: _drawWord),
+          FilledButton.icon(icon: const Icon(Icons.shuffle), label: const Text('Sortear Palavra'), onPressed: _drawWordNormal),
           const SizedBox(height: 30),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Flexible(
-                child: Text(_currentWord?['ingles'] ?? 'Clique acima para sortear', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-              ),
-              if (_currentWord != null)
-                IconButton(icon: const Icon(Icons.volume_up, color: Colors.blue, size: 28), tooltip: "Ouvir", onPressed: () => _falarSorteio(_currentWord!['ingles'])),
+              Flexible(child: Text(_currentWordNormal?['ingles'] ?? 'Clique acima para sortear', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold), textAlign: TextAlign.center)),
+              if (_currentWordNormal != null) IconButton(icon: const Icon(Icons.volume_up, color: Colors.blue, size: 28), tooltip: "Ouvir", onPressed: () => _falar(_currentWordNormal!['ingles'])),
             ],
           ),
           const SizedBox(height: 20),
-          TextField(controller: _answerCtrl, enabled: _currentWord != null, decoration: const InputDecoration(labelText: 'Sua Tradução', border: OutlineInputBorder()), onChanged: (v) => setState((){})),
+          TextField(controller: _answerCtrl, enabled: _currentWordNormal != null, decoration: const InputDecoration(labelText: 'Sua Tradução', border: OutlineInputBorder()), onChanged: (v) => setState((){})),
           const SizedBox(height: 15),
-          ElevatedButton(onPressed: (_currentWord == null || _answerCtrl.text.isEmpty) ? null : _verifyAnswer, child: const Text('Confirmar Resposta')),
+          ElevatedButton(onPressed: (_currentWordNormal == null || _answerCtrl.text.isEmpty) ? null : _verifyAnswerNormal, child: const Text('Confirmar Resposta')),
           const SizedBox(height: 10),
-          Text(_resultText, style: TextStyle(fontSize: 18, color: _resultColor, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+          Text(_resultTextNormal, style: TextStyle(fontSize: 18, color: _resultColorNormal, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
           const SizedBox(height: 10),
 
-          if (_resultText.isNotEmpty && _currentWord?['imagem'] != null && _currentWord!['imagem'] != '')
-            Expanded(child: Image.file(File(_currentWord!['imagem']), fit: BoxFit.contain))
+          if (_resultTextNormal.isNotEmpty && _currentWordNormal?['imagem'] != null && _currentWordNormal!['imagem'] != '')
+            Expanded(child: Image.file(File(_currentWordNormal!['imagem']), fit: BoxFit.contain))
           else
             const Spacer(),
 
           GestureDetector(
               onTap: () => _pageController.animateToPage(1, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut),
-              child: const Column(
-                  children: [
-                    Text("Modo Papagaio", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
-                    Icon(Icons.keyboard_arrow_up, color: Colors.grey, size: 35),
-                  ]
-              )
+              child: const Column(children: [ Text("Modo Papagaio", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)), Icon(Icons.keyboard_arrow_up, color: Colors.grey, size: 35) ])
           ),
           const SizedBox(height: 10),
         ],
@@ -567,31 +628,18 @@ class _PracticeTabState extends State<PracticeTab> {
     );
   }
 
+  // --- Nível 2: Modo Papagaio ---
   Widget _buildParrotPractice() {
     return Padding(
       padding: const EdgeInsets.all(20.0),
       child: Column(
         children: [
-          // Seta de Retorno
           GestureDetector(
               onTap: () => _pageController.animateToPage(0, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut),
-              child: const Column(
-                  children: [
-                    Icon(Icons.keyboard_arrow_down, color: Colors.grey, size: 35),
-                    Text("Modo Sorteio", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
-                  ]
-              )
+              child: const Column(children: [ Icon(Icons.keyboard_arrow_down, color: Colors.grey, size: 35), Text("Modo Sorteio", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)) ])
           ),
           const SizedBox(height: 10),
-
-          const Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text('🦜', style: TextStyle(fontSize: 35)),
-              SizedBox(width: 10),
-              Text('Modo Papagaio', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-            ],
-          ),
+          const Row(mainAxisAlignment: MainAxisAlignment.center, children: [ Text('🦜', style: TextStyle(fontSize: 35)), SizedBox(width: 10), Text('Modo Papagaio', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)) ]),
           const Divider(height: 15),
 
           Expanded(
@@ -604,88 +652,109 @@ class _PracticeTabState extends State<PracticeTab> {
                           ignoring: _isParrotPlaying,
                           child: Column(
                             children: [
-                              DropdownButtonFormField<String>(
-                                  decoration: const InputDecoration(labelText: 'Seu Idioma (Origem)', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 15, vertical: 12)),
-                                  value: _parrotNativeLang,
-                                  items: supportedLanguages.keys.map((l) => DropdownMenuItem(value: l, child: Text(l))).toList(),
-                                  onChanged: (v) { setState(() => _parrotNativeLang = v!); _saveParrotSettings(); }
-                              ),
+                              DropdownButtonFormField<String>(decoration: const InputDecoration(labelText: 'Seu Idioma (Origem)', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 15, vertical: 12)), value: _parrotNativeLang, items: supportedLanguages.keys.map((l) => DropdownMenuItem(value: l, child: Text(l))).toList(), onChanged: (v) { setState(() => _parrotNativeLang = v!); _saveParrotSettings(); }),
                               const SizedBox(height: 12),
-
-                              DropdownButtonFormField<String>(
-                                  decoration: const InputDecoration(labelText: 'Filtro de Palavras', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 15, vertical: 12)),
-                                  value: _parrotFilter,
-                                  items: const [
-                                    DropdownMenuItem(value: 'todas', child: Text("Todas as palavras salvas")),
-                                    DropdownMenuItem(value: '10', child: Text("Últimas 10 palavras")),
-                                    DropdownMenuItem(value: '20', child: Text("Últimas 20 palavras")),
-                                    DropdownMenuItem(value: '30', child: Text("Últimas 30 palavras")),
-                                    DropdownMenuItem(value: 'custom', child: Text("Quantidade Personalizada...")),
-                                  ],
-                                  onChanged: (v) { setState(() => _parrotFilter = v!); _saveParrotSettings(); }
-                              ),
-
-                              if (_parrotFilter == 'custom')
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 10),
-                                  child: TextField(
-                                    controller: _parrotCustomCtrl,
-                                    keyboardType: TextInputType.number,
-                                    decoration: const InputDecoration(labelText: 'Digite a quantidade (> 0)', border: OutlineInputBorder(), isDense: true),
-                                  ),
-                                ),
+                              DropdownButtonFormField<String>(decoration: const InputDecoration(labelText: 'Filtro de Palavras', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 15, vertical: 12)), value: _parrotFilter, items: const [ DropdownMenuItem(value: 'todas', child: Text("Todas as palavras salvas")), DropdownMenuItem(value: '10', child: Text("Últimas 10 palavras")), DropdownMenuItem(value: '20', child: Text("Últimas 20 palavras")), DropdownMenuItem(value: '30', child: Text("Últimas 30 palavras")), DropdownMenuItem(value: 'custom', child: Text("Quantidade Personalizada...")) ], onChanged: (v) { setState(() => _parrotFilter = v!); _saveParrotSettings(); }),
+                              if (_parrotFilter == 'custom') Padding(padding: const EdgeInsets.only(top: 10), child: TextField(controller: _parrotCustomCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Digite a quantidade (> 0)', border: OutlineInputBorder(), isDense: true))),
                               const SizedBox(height: 12),
-
-                              DropdownButtonFormField<double>(
-                                  decoration: const InputDecoration(labelText: 'Velocidade da Voz', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 15, vertical: 12)),
-                                  value: _parrotSpeed,
-                                  items: const [
-                                    DropdownMenuItem(value: 0.5, child: Text("Lento (0.5x)")),
-                                    DropdownMenuItem(value: 1.0, child: Text("Normal (1x)")),
-                                    DropdownMenuItem(value: 1.5, child: Text("Rápido (1.5x)")),
-                                    DropdownMenuItem(value: 2.0, child: Text("Turbo (2x)")),
-                                  ],
-                                  onChanged: (v) { setState(() => _parrotSpeed = v!); _saveParrotSettings(); }
-                              ),
+                              DropdownButtonFormField<double>(decoration: const InputDecoration(labelText: 'Velocidade da Voz', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 15, vertical: 12)), value: _parrotSpeed, items: const [ DropdownMenuItem(value: 0.5, child: Text("Lento (0.5x)")), DropdownMenuItem(value: 1.0, child: Text("Normal (1x)")), DropdownMenuItem(value: 1.5, child: Text("Rápido (1.5x)")), DropdownMenuItem(value: 2.0, child: Text("Turbo (2x)")) ], onChanged: (v) { setState(() => _parrotSpeed = v!); _saveParrotSettings(); }),
                               const SizedBox(height: 12),
-
-                              DropdownButtonFormField<String>(
-                                  decoration: const InputDecoration(labelText: 'Modo de Repetição', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 15, vertical: 12)),
-                                  value: _parrotMode,
-                                  items: const [
-                                    DropdownMenuItem(value: 'loop', child: Text("🔁 Em Loop (Sorteio Infinito)")),
-                                    DropdownMenuItem(value: 'single', child: Text("➡️ 1 Sequência (Parar no fim)")),
-                                  ],
-                                  onChanged: (v) { setState(() => _parrotMode = v!); _saveParrotSettings(); }
-                              ),
+                              DropdownButtonFormField<String>(decoration: const InputDecoration(labelText: 'Modo de Repetição', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 15, vertical: 12)), value: _parrotMode, items: const [ DropdownMenuItem(value: 'loop', child: Text("🔁 Em Loop (Sorteio Infinito)")), DropdownMenuItem(value: 'single', child: Text("➡️ 1 Sequência (Parar no fim)")) ], onChanged: (v) { setState(() => _parrotMode = v!); _saveParrotSettings(); }),
                             ],
                           )
                       )
                   ),
-
                   const SizedBox(height: 35),
-
-                  Text(
-                      _parrotCurrentWordDisplay.isEmpty ? 'Pronto para voar!' : _parrotCurrentWordDisplay,
-                      style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.blue),
-                      textAlign: TextAlign.center
-                  ),
+                  Text(_parrotCurrentWordDisplay.isEmpty ? 'Pronto para voar!' : _parrotCurrentWordDisplay, style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.blue), textAlign: TextAlign.center),
                   const SizedBox(height: 20),
                 ],
               ),
             ),
           ),
 
-          SizedBox(
-            width: double.infinity,
-            height: 65,
-            child: FilledButton.icon(
-              style: FilledButton.styleFrom(backgroundColor: _isParrotPlaying ? Colors.red.shade700 : Colors.green.shade700),
-              onPressed: _toggleParrot,
-              icon: Icon(_isParrotPlaying ? Icons.stop : Icons.play_arrow, size: 30),
-              label: Text(_isParrotPlaying ? "Parar Papagaio" : "Iniciar Papagaio", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          SizedBox(width: double.infinity, height: 65, child: FilledButton.icon(style: FilledButton.styleFrom(backgroundColor: _isParrotPlaying ? Colors.red.shade700 : Colors.green.shade700), onPressed: _toggleParrot, icon: Icon(_isParrotPlaying ? Icons.stop : Icons.play_arrow, size: 30), label: Text(_isParrotPlaying ? "Parar Papagaio" : "Iniciar Papagaio", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)))),
+          const SizedBox(height: 15),
+
+          GestureDetector(
+              onTap: () => _pageController.animateToPage(2, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut),
+              child: const Column(children: [ Text("Modo Língua Afiada", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)), Icon(Icons.keyboard_arrow_up, color: Colors.grey, size: 35) ])
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- Nível 3: Modo Língua Afiada 🗡️ ---
+  Widget _buildSharpPractice() {
+    return Padding(
+      padding: const EdgeInsets.all(20.0),
+      child: Column(
+        children: [
+          GestureDetector(
+              onTap: () => _pageController.animateToPage(1, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut),
+              child: const Column(children: [ Icon(Icons.keyboard_arrow_down, color: Colors.grey, size: 35), Text("Modo Papagaio", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)) ])
+          ),
+          const SizedBox(height: 10),
+          const Row(mainAxisAlignment: MainAxisAlignment.center, children: [ Text('🗡️', style: TextStyle(fontSize: 35)), SizedBox(width: 10), Text('Língua Afiada', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)) ]),
+          const Divider(height: 15),
+
+          // Filtro Exclusivo do Modo Afiado
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                    decoration: const InputDecoration(labelText: 'Filtro de Sorteio', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 10), isDense: true),
+                    value: _sharpFilter,
+                    items: const [ DropdownMenuItem(value: 'todas', child: Text("Todas as palavras")), DropdownMenuItem(value: '10', child: Text("Últimas 10")), DropdownMenuItem(value: '20', child: Text("Últimas 20")), DropdownMenuItem(value: '30', child: Text("Últimas 30")), DropdownMenuItem(value: 'custom', child: Text("Personalizado")) ],
+                    onChanged: (v) { setState(() => _sharpFilter = v!); _saveSharpSettings(); }
+                ),
+              ),
+              if (_sharpFilter == 'custom')
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 10),
+                    child: TextField(controller: _sharpCustomCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Qtd (>0)', border: OutlineInputBorder(), isDense: true)),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 25),
+
+          FilledButton.icon(icon: const Icon(Icons.shuffle), label: const Text('Sortear Nova Palavra'), onPressed: _drawWordSharp),
+          const SizedBox(height: 40),
+
+          // Área da Palavra
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(child: Text(_currentWordSharp?['ingles'] ?? 'Sorteie para começar', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold), textAlign: TextAlign.center)),
+              if (_currentWordSharp != null) IconButton(icon: const Icon(Icons.volume_up, color: Colors.blue, size: 35), tooltip: "Ouvir Novamente", onPressed: () => _falar(_currentWordSharp!['ingles'])),
+            ],
+          ),
+
+          if (_currentWordSharp != null) ...[
+            const SizedBox(height: 10),
+            Text(_currentWordSharp!['traducoes'].toString().replaceAll('|', ' ou '), style: const TextStyle(fontSize: 16, color: Colors.grey)),
+          ],
+
+          const Spacer(),
+
+          // Resultado e O que ele entendeu
+          Text(_sharpResultText, style: TextStyle(fontSize: 20, color: _sharpResultColor, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+          const SizedBox(height: 30),
+
+          // Botão Gigante de Microfone
+          GestureDetector(
+            onTap: _currentWordSharp == null ? null : _listenSharp,
+            child: CircleAvatar(
+              radius: 50,
+              backgroundColor: _currentWordSharp == null ? Colors.grey : (_isListening ? Colors.red : Colors.blue),
+              child: Icon(_isListening ? Icons.mic : Icons.mic_none, size: 50, color: Colors.white),
             ),
           ),
+          const SizedBox(height: 15),
+          Text(_isListening ? "A escutar... Fale agora!" : (_currentWordSharp == null ? "" : "Toque para falar"), style: const TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 30),
         ],
       ),
     );
@@ -804,7 +873,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
 }
 
 // ==========================================
-// ABA 1: REGISTRO E DEMAIS CLASSES (Sem alterações)
+// ABA 1: REGISTRO (Sem alterações visuais, apenas base)
 // ==========================================
 class RegisterTab extends StatefulWidget {
   final String currentLang;
@@ -819,7 +888,6 @@ class _RegisterTabState extends State<RegisterTab> {
   final _traducaoCtrl = TextEditingController();
   File? _imageFile;
   bool _isTranslating = false;
-
   final ImagePicker _picker = ImagePicker();
   final FlutterTts _flutterTts = FlutterTts();
 
@@ -848,8 +916,7 @@ class _RegisterTabState extends State<RegisterTab> {
   Future<void> _pickImage(ImageSource source) async {
     final XFile? pickedFile = await _picker.pickImage(source: source);
     if (pickedFile != null) {
-      final directory = await getApplicationDocumentsDirectory();
-      final String newPath = path.join(directory.path, 'img_${Random().nextInt(100000)}.jpg');
+      final String newPath = path.join((await getApplicationDocumentsDirectory()).path, 'img_${Random().nextInt(100000)}.jpg');
       final File savedImage = await File(pickedFile.path).copy(newPath);
       setState(() => _imageFile = savedImage);
     }
@@ -860,34 +927,18 @@ class _RegisterTabState extends State<RegisterTab> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Preencha a palavra e a tradução antes de salvar.')));
       return;
     }
-
     try {
       final db = DatabaseHelper.instance;
       final ex = await db.fetchMeanings(_inglesCtrl.text.trim(), widget.currentLang);
-
       if (ex.isNotEmpty) {
         if (!mounted) return;
         bool? addAnother = await showDialog<bool>(
             context: context,
-            builder: (c) => AlertDialog(
-              title: const Text("Palavra Existente"),
-              content: const Text("Esta palavra já existe na biblioteca desta língua. Deseja adicionar este novo significado a ela?"),
-              actions: [
-                TextButton(onPressed: () => Navigator.pop(c, false), child: const Text("Cancelar")),
-                FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text("Sim")),
-              ],
-            )
+            builder: (c) => AlertDialog(title: const Text("Palavra Existente"), content: const Text("Esta palavra já existe na biblioteca desta língua. Deseja adicionar este novo significado a ela?"), actions: [TextButton(onPressed: () => Navigator.pop(c, false), child: const Text("Cancelar")), FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text("Sim"))])
         );
         if (addAnother != true) return;
       }
-
-      await db.insertWord({
-        'ingles': _inglesCtrl.text.trim(),
-        'traducao': _traducaoCtrl.text.trim(),
-        'imagem': _imageFile?.path ?? '',
-        'lingua': widget.currentLang,
-      });
-
+      await db.insertWord({'ingles': _inglesCtrl.text.trim(), 'traducao': _traducaoCtrl.text.trim(), 'imagem': _imageFile?.path ?? '', 'lingua': widget.currentLang});
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Palavra salva com sucesso!'), backgroundColor: Colors.green));
       setState(() { _inglesCtrl.clear(); _traducaoCtrl.clear(); _imageFile = null; });
@@ -935,6 +986,9 @@ class _RegisterTabState extends State<RegisterTab> {
   }
 }
 
+// ==========================================
+// ABA 3: BIBLIOTECA (Sem alterações)
+// ==========================================
 class LibraryTab extends StatefulWidget {
   final String currentLang;
   const LibraryTab({super.key, required this.currentLang});
@@ -948,10 +1002,7 @@ class _LibraryTabState extends State<LibraryTab> {
   final _searchCtrl = TextEditingController();
 
   @override
-  void initState() {
-    super.initState();
-    _loadWords();
-  }
+  void initState() { super.initState(); _loadWords(); }
 
   Future<void> _loadWords([String query = '']) async {
     final words = await DatabaseHelper.instance.fetchDistinctWords(widget.currentLang, query);
@@ -971,11 +1022,7 @@ class _LibraryTabState extends State<LibraryTab> {
         children: [
           Text("Sua Biblioteca em ${widget.currentLang}", style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 10),
-          TextField(
-            controller: _searchCtrl,
-            decoration: const InputDecoration(labelText: 'Pesquisar...', prefixIcon: Icon(Icons.search), border: OutlineInputBorder()),
-            onChanged: (value) => _loadWords(value),
-          ),
+          TextField(controller: _searchCtrl, decoration: const InputDecoration(labelText: 'Pesquisar...', prefixIcon: Icon(Icons.search), border: OutlineInputBorder()), onChanged: (value) => _loadWords(value)),
           const SizedBox(height: 10),
           Expanded(
             child: _distinctWords.isEmpty
@@ -985,14 +1032,10 @@ class _LibraryTabState extends State<LibraryTab> {
               itemBuilder: (context, index) {
                 final word = _distinctWords[index];
                 final hasImage = word['imagem'] != null && word['imagem'].toString().isNotEmpty;
-
                 return Card(
-                  elevation: 2,
-                  margin: const EdgeInsets.symmetric(vertical: 6),
+                  elevation: 2, margin: const EdgeInsets.symmetric(vertical: 6),
                   child: ListTile(
-                    leading: hasImage
-                        ? CircleAvatar(backgroundImage: FileImage(File(word['imagem'])))
-                        : const CircleAvatar(child: Icon(Icons.text_fields)),
+                    leading: hasImage ? CircleAvatar(backgroundImage: FileImage(File(word['imagem']))) : const CircleAvatar(child: Icon(Icons.text_fields)),
                     title: Text(word['ingles'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                     subtitle: Text(word['traducao'] ?? ''),
                     trailing: const Icon(Icons.chevron_right, color: Colors.grey),
@@ -1012,7 +1055,6 @@ class WordDetailsScreen extends StatefulWidget {
   final String ingles;
   final String currentLang;
   const WordDetailsScreen({super.key, required this.ingles, required this.currentLang});
-
   @override
   State<WordDetailsScreen> createState() => _WordDetailsScreenState();
 }
@@ -1021,10 +1063,7 @@ class _WordDetailsScreenState extends State<WordDetailsScreen> {
   List<Map<String, dynamic>> _meanings = [];
 
   @override
-  void initState() {
-    super.initState();
-    _loadMeanings();
-  }
+  void initState() { super.initState(); _loadMeanings(); }
 
   Future<void> _loadMeanings() async {
     final res = await DatabaseHelper.instance.fetchMeanings(widget.ingles, widget.currentLang);
@@ -1034,11 +1073,7 @@ class _WordDetailsScreenState extends State<WordDetailsScreen> {
   void _irParaEdicao() async {
     await Navigator.push(context, MaterialPageRoute(builder: (context) => EditWordScreen(ingles: widget.ingles, meanings: _meanings, currentLang: widget.currentLang)));
     final res = await DatabaseHelper.instance.fetchMeanings(widget.ingles, widget.currentLang);
-    if (res.isEmpty && mounted) {
-      Navigator.pop(context);
-    } else {
-      setState(() => _meanings = res);
-    }
+    if (res.isEmpty && mounted) { Navigator.pop(context); } else { setState(() => _meanings = res); }
   }
 
   @override
@@ -1046,9 +1081,7 @@ class _WordDetailsScreenState extends State<WordDetailsScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(widget.ingles), actions: [IconButton(icon: const Icon(Icons.edit), tooltip: "Editar", onPressed: _irParaEdicao)]),
       body: ListView.separated(
-        padding: const EdgeInsets.all(20),
-        itemCount: _meanings.length,
-        separatorBuilder: (_, __) => const Divider(height: 40),
+        padding: const EdgeInsets.all(20), itemCount: _meanings.length, separatorBuilder: (_, __) => const Divider(height: 40),
         itemBuilder: (context, index) {
           final sig = _meanings[index];
           final hasImg = sig['imagem'].toString().isNotEmpty;
@@ -1069,9 +1102,7 @@ class EditWordScreen extends StatefulWidget {
   final String ingles;
   final List<Map<String, dynamic>> meanings;
   final String currentLang;
-
   const EditWordScreen({super.key, required this.ingles, required this.meanings, required this.currentLang});
-
   @override
   State<EditWordScreen> createState() => _EditWordScreenState();
 }
@@ -1085,9 +1116,7 @@ class _EditWordScreenState extends State<EditWordScreen> {
   void initState() {
     super.initState();
     _inglesCtrl = TextEditingController(text: widget.ingles);
-    for (var m in widget.meanings) {
-      _editMeanings.add({ 'id': m['id'], 'traducao': TextEditingController(text: m['traducao']), 'imagem': m['imagem'] });
-    }
+    for (var m in widget.meanings) { _editMeanings.add({ 'id': m['id'], 'traducao': TextEditingController(text: m['traducao']), 'imagem': m['imagem'] }); }
   }
 
   void _addSignificado() { setState(() { _editMeanings.add({ 'id': null, 'traducao': TextEditingController(), 'imagem': '' }); }); }
@@ -1107,21 +1136,8 @@ class _EditWordScreenState extends State<EditWordScreen> {
   }
 
   Future<void> _excluirPalavraToda() async {
-    bool? conf = await showDialog<bool>(
-        context: context,
-        builder: (c) => AlertDialog(
-          title: const Text("Excluir Palavra?"),
-          content: const Text("Deseja apagar esta palavra e TODOS os seus significados nesta língua?"),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text("Cancelar")),
-            FilledButton(style: FilledButton.styleFrom(backgroundColor: Colors.red), onPressed: () => Navigator.pop(c, true), child: const Text("Excluir")),
-          ],
-        )
-    );
-    if (conf == true) {
-      await DatabaseHelper.instance.deleteAllMeanings(widget.ingles, widget.currentLang);
-      if (!mounted) return; Navigator.pop(context);
-    }
+    bool? conf = await showDialog<bool>(context: context, builder: (c) => AlertDialog(title: const Text("Excluir Palavra?"), content: const Text("Deseja apagar esta palavra e TODOS os seus significados nesta língua?"), actions: [TextButton(onPressed: () => Navigator.pop(c, false), child: const Text("Cancelar")), FilledButton(style: FilledButton.styleFrom(backgroundColor: Colors.red), onPressed: () => Navigator.pop(c, true), child: const Text("Excluir"))]));
+    if (conf == true) { await DatabaseHelper.instance.deleteAllMeanings(widget.ingles, widget.currentLang); if (!mounted) return; Navigator.pop(context); }
   }
 
   Future<void> _salvarAlteracoes() async {
@@ -1171,11 +1187,7 @@ class _EditWordScreenState extends State<EditWordScreen> {
                                 if (hasImg) Container(margin: const EdgeInsets.only(right: 10), child: Image.file(File(m['imagem']), width: 40, height: 40, fit: BoxFit.cover)),
                                 TextButton.icon(
                                   icon: const Icon(Icons.image), label: Text(hasImg ? "Alterar Foto" : "Adicionar Foto"),
-                                  onPressed: () { showModalBottomSheet(context: context, builder: (_) => SafeArea(child: Wrap(children: [
-                                    ListTile(leading: const Icon(Icons.camera_alt), title: const Text('Câmera'), onTap: () { Navigator.pop(context); _alterarFoto(index, ImageSource.camera); }),
-                                    ListTile(leading: const Icon(Icons.photo_library), title: const Text('Galeria'), onTap: () { Navigator.pop(context); _alterarFoto(index, ImageSource.gallery); }),
-                                    if (hasImg) ListTile(leading: const Icon(Icons.delete, color: Colors.red), title: const Text('Remover Imagem', style: TextStyle(color: Colors.red)), onTap: () { Navigator.pop(context); setState(() => m['imagem'] = ''); }),
-                                  ])));},
+                                  onPressed: () { showModalBottomSheet(context: context, builder: (_) => SafeArea(child: Wrap(children: [ListTile(leading: const Icon(Icons.camera_alt), title: const Text('Câmera'), onTap: () { Navigator.pop(context); _alterarFoto(index, ImageSource.camera); }), ListTile(leading: const Icon(Icons.photo_library), title: const Text('Galeria'), onTap: () { Navigator.pop(context); _alterarFoto(index, ImageSource.gallery); }), if (hasImg) ListTile(leading: const Icon(Icons.delete, color: Colors.red), title: const Text('Remover Imagem', style: TextStyle(color: Colors.red)), onTap: () { Navigator.pop(context); setState(() => m['imagem'] = ''); })])));},
                                 )
                               ],
                             )
@@ -1186,13 +1198,7 @@ class _EditWordScreenState extends State<EditWordScreen> {
                   },
                 ),
               ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  OutlinedButton.icon(onPressed: _addSignificado, icon: const Icon(Icons.add), label: const Text("Significado")),
-                  TextButton.icon(onPressed: _excluirPalavraToda, icon: const Icon(Icons.delete_forever, color: Colors.red), label: const Text("Excluir Palavra", style: TextStyle(color: Colors.red))),
-                ],
-              ),
+              Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [OutlinedButton.icon(onPressed: _addSignificado, icon: const Icon(Icons.add), label: const Text("Significado")), TextButton.icon(onPressed: _excluirPalavraToda, icon: const Icon(Icons.delete_forever, color: Colors.red), label: const Text("Excluir Palavra", style: TextStyle(color: Colors.red)))]),
               const Divider(),
               SizedBox(width: double.infinity, height: 45, child: FilledButton.icon(onPressed: _salvarAlteracoes, icon: const Icon(Icons.save), label: const Text("Salvar Alterações")))
             ],
