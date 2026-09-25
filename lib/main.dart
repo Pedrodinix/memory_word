@@ -791,7 +791,7 @@ class _PracticeTabState extends State<PracticeTab> {
                             )
                         ),
                         const SizedBox(height: 25),
-                        Text(_parrotCurrentWordDisplay.isEmpty ? 'Pronto para voar!' : _parrotCurrentWordDisplay, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.blue), textAlign: TextAlign.center),
+                        Text(_parrotCurrentWordDisplay.isEmpty ? 'Pronto para voar!' : _parrotCurrentWordDisplay, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.green), textAlign: TextAlign.center),
                         const SizedBox(height: 20),
                       ],
                     ),
