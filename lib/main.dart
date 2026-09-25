@@ -4,6 +4,7 @@ import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:translator/translator.dart' as tr;
+import 'package:flutter_tts/flutter_tts.dart'; // <-- IMPORTAÇÃO DO ÁUDIO
 import 'dart:io';
 import 'dart:math';
 
@@ -25,7 +26,7 @@ void main() async {
 }
 
 // ==========================================
-// BANCO DE DADOS (Com Migração Versão 2)
+// BANCO DE DADOS
 // ==========================================
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
@@ -361,7 +362,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
 }
 
 // ==========================================
-// ABA 1: REGISTRO
+// ABA 1: REGISTRO (COM BOTÃO DE ÁUDIO)
 // ==========================================
 class RegisterTab extends StatefulWidget {
   const RegisterTab({super.key});
@@ -375,7 +376,15 @@ class _RegisterTabState extends State<RegisterTab> {
   final _traducaoCtrl = TextEditingController();
   File? _imageFile;
   bool _isTranslating = false;
+
   final ImagePicker _picker = ImagePicker();
+  final FlutterTts _flutterTts = FlutterTts(); // Instância do Leitor de Voz
+
+  Future<void> _falar(String texto) async {
+    if (texto.isEmpty) return;
+    await _flutterTts.setLanguage("en-US"); // Define o sotaque para Inglês
+    await _flutterTts.speak(texto);
+  }
 
   Future<void> _translateWord() async {
     if (_inglesCtrl.text.isEmpty) return;
@@ -451,7 +460,18 @@ class _RegisterTabState extends State<RegisterTab> {
               Expanded(
                 child: TextField(controller: _inglesCtrl, decoration: const InputDecoration(labelText: 'Palavra em Inglês', border: OutlineInputBorder())),
               ),
-              IconButton(icon: _isTranslating ? const CircularProgressIndicator() : const Icon(Icons.g_translate, color: Colors.blue), onPressed: _translateWord),
+              // BOTÃO DE OUVIR (TTS)
+              IconButton(
+                icon: const Icon(Icons.volume_up, color: Colors.orange),
+                tooltip: "Ouvir Pronúncia",
+                onPressed: () => _falar(_inglesCtrl.text.trim()),
+              ),
+              // BOTÃO DE TRADUZIR
+              IconButton(
+                  icon: _isTranslating ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.g_translate, color: Colors.blue),
+                  tooltip: "Traduzir",
+                  onPressed: _translateWord
+              ),
             ],
           ),
           const SizedBox(height: 15),
@@ -478,7 +498,7 @@ class _RegisterTabState extends State<RegisterTab> {
 }
 
 // ==========================================
-// ABA 2: PRÁTICA (MODIFICADA PARA MÚLTIPLOS SIGNIFICADOS)
+// ABA 2: PRÁTICA (COM BOTÃO DE ÁUDIO)
 // ==========================================
 class PracticeTab extends StatefulWidget {
   const PracticeTab({super.key});
@@ -492,6 +512,13 @@ class _PracticeTabState extends State<PracticeTab> {
   final _answerCtrl = TextEditingController();
   String _resultText = '';
   Color _resultColor = Colors.black;
+
+  final FlutterTts _flutterTts = FlutterTts(); // Instância do Leitor de Voz
+
+  Future<void> _falar(String texto) async {
+    await _flutterTts.setLanguage("en-US"); // Define o sotaque para Inglês
+    await _flutterTts.speak(texto);
+  }
 
   Future<void> _drawWord() async {
     final words = await DatabaseHelper.instance.fetchWordsForPractice();
@@ -514,7 +541,6 @@ class _PracticeTabState extends State<PracticeTab> {
 
     final userAnswer = _answerCtrl.text.trim().toLowerCase();
 
-    // Extrai todas as respostas válidas que foram agrupadas no banco
     final List<String> correctAnswers = _currentWord!['traducoes']
         .toString()
         .split('|')
@@ -526,7 +552,6 @@ class _PracticeTabState extends State<PracticeTab> {
         _resultText = 'Resposta Correta! 🎉';
         _resultColor = Colors.green;
       } else {
-        // Exibe todas as opções corretas de forma amigável se o usuário errar
         final displayCorrect = _currentWord!['traducoes'].toString().replaceAll('|', ' ou ');
         _resultText = 'Incorreta. O correto é: $displayCorrect';
         _resultColor = Colors.red;
@@ -542,7 +567,27 @@ class _PracticeTabState extends State<PracticeTab> {
         children: [
           FilledButton.icon(icon: const Icon(Icons.shuffle), label: const Text('Sortear Palavra'), onPressed: _drawWord),
           const SizedBox(height: 30),
-          Text(_currentWord?['ingles'] ?? 'Clique acima para sortear', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+
+          // ROW MODIFICADA PARA TER O TEXTO E O BOTÃO DE OUVIR JUNTOS
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(
+                child: Text(
+                    _currentWord?['ingles'] ?? 'Clique acima para sortear',
+                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center
+                ),
+              ),
+              if (_currentWord != null)
+                IconButton(
+                  icon: const Icon(Icons.volume_up, color: Colors.orange, size: 28),
+                  tooltip: "Ouvir Pronúncia",
+                  onPressed: () => _falar(_currentWord!['ingles']),
+                ),
+            ],
+          ),
+
           const SizedBox(height: 20),
           TextField(
             controller: _answerCtrl,
