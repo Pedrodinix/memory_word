@@ -462,7 +462,7 @@ class _RegisterTabState extends State<RegisterTab> {
               ),
               // BOTÃO DE OUVIR (TTS)
               IconButton(
-                icon: const Icon(Icons.volume_up, color: Colors.orange),
+                icon: const Icon(Icons.volume_up, color: Colors.blue),
                 tooltip: "Ouvir Pronúncia",
                 onPressed: () => _falar(_inglesCtrl.text.trim()),
               ),
@@ -525,7 +525,7 @@ class _PracticeTabState extends State<PracticeTab> {
     if (words.isEmpty) {
       setState(() {
         _resultText = 'Nenhuma palavra atende ao filtro atual.';
-        _resultColor = Colors.orange;
+        _resultColor = Colors.blue;
       });
       return;
     }
@@ -581,7 +581,7 @@ class _PracticeTabState extends State<PracticeTab> {
               ),
               if (_currentWord != null)
                 IconButton(
-                  icon: const Icon(Icons.volume_up, color: Colors.orange, size: 28),
+                  icon: const Icon(Icons.volume_up, color: Colors.blue, size: 28),
                   tooltip: "Ouvir Pronúncia",
                   onPressed: () => _falar(_currentWord!['ingles']),
                 ),
