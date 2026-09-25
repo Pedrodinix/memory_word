@@ -10,8 +10,17 @@ import 'dart:math';
 // Variável global para controlar o tema em tempo real
 final ValueNotifier<ThemeMode> appThemeMode = ValueNotifier(ThemeMode.light);
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // LER A CONFIGURAÇÃO SALVA ANTES DE INICIAR O APP
+  String temaSalvo = await DatabaseHelper.instance.getConfig('tema');
+  if (temaSalvo == 'dark') {
+    appThemeMode.value = ThemeMode.dark;
+  } else {
+    appThemeMode.value = ThemeMode.light;
+  }
+
   runApp(const MemoryWordApp());
 }
 
@@ -36,7 +45,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       fullPath,
-      version: 2, // Versão atualizada para forçar a criação da tabela em instalações existentes
+      version: 2,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE palavras (
@@ -109,24 +118,41 @@ class DatabaseHelper {
       }
     }
 
+    String query = '''
+      SELECT ingles, 
+             GROUP_CONCAT(traducao, '|') as traducoes, 
+             MAX(imagem) as imagem
+      FROM palavras
+      GROUP BY ingles COLLATE NOCASE
+      ORDER BY MAX(id) DESC
+    ''';
+
     if (limit > 0) {
-      return await db.query('palavras', orderBy: 'id DESC', limit: limit);
-    } else {
-      return await db.query('palavras', orderBy: 'id DESC');
+      query += ' LIMIT $limit';
     }
+
+    return await db.rawQuery(query);
   }
 
   Future<List<Map<String, dynamic>>> fetchDistinctWords([String query = '']) async {
     final db = await instance.database;
     if (query.isEmpty) {
-      return await db.rawQuery('SELECT DISTINCT ingles, (SELECT imagem FROM palavras p2 WHERE p2.ingles = p1.ingles LIMIT 1) as imagem, (SELECT traducao FROM palavras p3 WHERE p3.ingles = p1.ingles LIMIT 1) as traducao FROM palavras p1 ORDER BY ingles COLLATE NOCASE ASC');
+      return await db.rawQuery('''
+        SELECT ingles, 
+               MAX(imagem) as imagem, 
+               GROUP_CONCAT(traducao, ', ') as traducao 
+        FROM palavras 
+        GROUP BY ingles COLLATE NOCASE 
+        ORDER BY ingles COLLATE NOCASE ASC
+      ''');
     } else {
       return await db.rawQuery('''
-        SELECT DISTINCT ingles, 
-        (SELECT imagem FROM palavras p2 WHERE p2.ingles = p1.ingles LIMIT 1) as imagem,
-        (SELECT traducao FROM palavras p3 WHERE p3.ingles = p1.ingles LIMIT 1) as traducao
-        FROM palavras p1 
+        SELECT ingles, 
+               MAX(imagem) as imagem, 
+               GROUP_CONCAT(traducao, ', ') as traducao 
+        FROM palavras 
         WHERE ingles LIKE ? OR traducao LIKE ? 
+        GROUP BY ingles COLLATE NOCASE 
         ORDER BY ingles COLLATE NOCASE ASC
       ''', ['%$query%', '%$query%']);
     }
@@ -452,7 +478,7 @@ class _RegisterTabState extends State<RegisterTab> {
 }
 
 // ==========================================
-// ABA 2: PRÁTICA
+// ABA 2: PRÁTICA (MODIFICADA PARA MÚLTIPLOS SIGNIFICADOS)
 // ==========================================
 class PracticeTab extends StatefulWidget {
   const PracticeTab({super.key});
@@ -487,14 +513,22 @@ class _PracticeTabState extends State<PracticeTab> {
     if (_currentWord == null || _answerCtrl.text.isEmpty) return;
 
     final userAnswer = _answerCtrl.text.trim().toLowerCase();
-    final correctAnswer = _currentWord!['traducao'].toString().toLowerCase();
+
+    // Extrai todas as respostas válidas que foram agrupadas no banco
+    final List<String> correctAnswers = _currentWord!['traducoes']
+        .toString()
+        .split('|')
+        .map((e) => e.trim().toLowerCase())
+        .toList();
 
     setState(() {
-      if (userAnswer == correctAnswer) {
+      if (correctAnswers.contains(userAnswer)) {
         _resultText = 'Resposta Correta! 🎉';
         _resultColor = Colors.green;
       } else {
-        _resultText = 'Incorreta. O correto é: ${_currentWord!['traducao']}';
+        // Exibe todas as opções corretas de forma amigável se o usuário errar
+        final displayCorrect = _currentWord!['traducoes'].toString().replaceAll('|', ' ou ');
+        _resultText = 'Incorreta. O correto é: $displayCorrect';
         _resultColor = Colors.red;
       }
     });
@@ -522,9 +556,9 @@ class _PracticeTabState extends State<PracticeTab> {
             child: const Text('Confirmar Resposta'),
           ),
           const SizedBox(height: 20),
-          Text(_resultText, style: TextStyle(fontSize: 18, color: _resultColor, fontWeight: FontWeight.bold)),
+          Text(_resultText, style: TextStyle(fontSize: 18, color: _resultColor, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
           const SizedBox(height: 20),
-          if (_resultText.isNotEmpty && _currentWord?['imagem'] != '')
+          if (_resultText.isNotEmpty && _currentWord?['imagem'] != null && _currentWord!['imagem'] != '')
             Expanded(child: Image.file(File(_currentWord!['imagem']), fit: BoxFit.contain)),
         ],
       ),
