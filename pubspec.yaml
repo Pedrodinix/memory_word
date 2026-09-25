@@ -30,6 +30,8 @@ flutter:
   uses-material-design: true
   assets:
     - assets/correct.mp3
+    - assets/special.mp3
+    - assets/wrong.mp3
 
 flutter_launcher_icons:
   android: "launcher_icon"
