@@ -5,7 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:translator/translator.dart' as tr;
 import 'package:flutter_tts/flutter_tts.dart';
-import 'package:speech_to_text/speech_to_text.dart' as stt; // NOVA IMPORTAÇÃO
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'dart:io';
 import 'dart:math';
 
@@ -28,7 +28,6 @@ const Map<String, AppLanguage> supportedLanguages = {
   'Francês': AppLanguage('Francês', '🇫🇷', 'fr-FR', 'fr'),
 };
 
-// Variáveis globais para controlar tema e idioma em tempo real
 final ValueNotifier<ThemeMode> appThemeMode = ValueNotifier(ThemeMode.light);
 final ValueNotifier<String> appLanguage = ValueNotifier('Inglês');
 
@@ -199,7 +198,7 @@ class DatabaseHelper {
 }
 
 // ==========================================
-// APLICATIVO PRINCIPAL E NAVEGAÇÃO
+// APLICATIVO PRINCIPAL E NAVEGAÇÃO PRINCIPAL (ARRASTAR LATERAL)
 // ==========================================
 class MemoryWordApp extends StatelessWidget {
   const MemoryWordApp({super.key});
@@ -231,6 +230,19 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 1;
+  late PageController _mainPageController;
+
+  @override
+  void initState() {
+    super.initState();
+    _mainPageController = PageController(initialPage: _currentIndex);
+  }
+
+  @override
+  void dispose() {
+    _mainPageController.dispose();
+    super.dispose();
+  }
 
   void _abrirConfiguracoes() {
     showModalBottomSheet(
@@ -257,11 +269,13 @@ class _MainScreenState extends State<MainScreen> {
           IconButton(icon: const Icon(Icons.settings), tooltip: "Configurações", onPressed: _abrirConfiguracoes)
         ],
       ),
+      // Substituído IndexedStack por PageView Horizontal (Permite deslizar entre abas principais)
       body: ValueListenableBuilder<String>(
         valueListenable: appLanguage,
         builder: (context, currentLang, child) {
-          return IndexedStack(
-            index: _currentIndex,
+          return PageView(
+            controller: _mainPageController,
+            onPageChanged: (index) => setState(() => _currentIndex = index),
             children: [
               RegisterTab(currentLang: currentLang),
               PracticeTab(currentLang: currentLang),
@@ -272,7 +286,9 @@ class _MainScreenState extends State<MainScreen> {
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
+        onTap: (index) {
+          _mainPageController.animateToPage(index, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+        },
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.add), label: 'Novo'),
           BottomNavigationBarItem(icon: Icon(Icons.quiz), label: 'Praticar'),
@@ -376,6 +392,24 @@ class _PracticeTabState extends State<PracticeTab> {
     await _flutterTts.setLanguage(langData.ttsCode);
     await _flutterTts.setSpeechRate(rate);
     await _flutterTts.speak(texto);
+  }
+
+  // Setinhas minúsculas encostadas às margens
+  Widget _buildMinimalArrow(IconData icon, String text, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon == Icons.keyboard_arrow_down) Icon(icon, color: Colors.grey, size: 20),
+            Text(text, style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 11)),
+            if (icon == Icons.keyboard_arrow_up) Icon(icon, color: Colors.grey, size: 20),
+          ],
+        ),
+      ),
+    );
   }
 
   // --- Funções do MODO NORMAL ---
@@ -522,15 +556,22 @@ class _PracticeTabState extends State<PracticeTab> {
       _sharpResultText = '';
       _spokenText = '';
     });
-    // Fala a palavra automaticamente após o sorteio
     _falar(_currentWordSharp!['ingles']);
   }
 
   void _listenSharp() async {
     if (!_isListening) {
+      // Agora pedirá permissão formalmente e enviará os status
       bool available = await _speech.initialize(
-        onStatus: (val) => debugPrint('onStatus: $val'),
-        onError: (val) => debugPrint('onError: $val'),
+        onStatus: (val) {
+          if (val == 'notListening' || val == 'done') {
+            setState(() => _isListening = false);
+          }
+        },
+        onError: (val) {
+          setState(() => _isListening = false);
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro do Microfone: ${val.errorMsg}')));
+        },
       );
       if (available) {
         setState(() => _isListening = true);
@@ -544,11 +585,15 @@ class _PracticeTabState extends State<PracticeTab> {
               }
             });
           },
-          localeId: langData.ttsCode, // Ouve no idioma selecionado
+          localeId: langData.ttsCode,
         );
       } else {
         setState(() => _isListening = false);
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Reconhecimento de voz não disponível no telemóvel.')));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Reconhecimento indisponível. Conceda a permissão de Microfone no Manifest do Android!'))
+          );
+        }
       }
     } else {
       setState(() => _isListening = false);
@@ -560,7 +605,6 @@ class _PracticeTabState extends State<PracticeTab> {
   void _verifySpeech() {
     if (_currentWordSharp == null || _spokenText.isEmpty) return;
 
-    // Limpa a string tirando pontuações e pondo em minúsculo para comparar melhor
     String target = _currentWordSharp!['ingles'].toString().toLowerCase().replaceAll(RegExp(r'[^\w\s]+'), '');
     String spoken = _spokenText.toLowerCase().replaceAll(RegExp(r'[^\w\s]+'), '');
 
@@ -576,7 +620,7 @@ class _PracticeTabState extends State<PracticeTab> {
   }
 
 
-  // --- Construção da Interface Dividida em 3 Níveis ---
+  // --- Construção da Interface Dividida ---
   @override
   Widget build(BuildContext context) {
     return PageView(
@@ -585,178 +629,167 @@ class _PracticeTabState extends State<PracticeTab> {
       children: [
         _buildNormalPractice(),
         _buildParrotPractice(),
-        _buildSharpPractice(), // NOVA ABA
+        _buildSharpPractice(),
       ],
     );
   }
 
   // --- Nível 1: Sorteio Normal ---
   Widget _buildNormalPractice() {
-    return Padding(
-      padding: const EdgeInsets.all(20.0),
-      child: Column(
-        children: [
-          FilledButton.icon(icon: const Icon(Icons.shuffle), label: const Text('Sortear Palavra'), onPressed: _drawWordNormal),
-          const SizedBox(height: 30),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Flexible(child: Text(_currentWordNormal?['ingles'] ?? 'Clique acima para sortear', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold), textAlign: TextAlign.center)),
-              if (_currentWordNormal != null) IconButton(icon: const Icon(Icons.volume_up, color: Colors.blue, size: 28), tooltip: "Ouvir", onPressed: () => _falar(_currentWordNormal!['ingles'])),
-            ],
-          ),
-          const SizedBox(height: 20),
-          TextField(controller: _answerCtrl, enabled: _currentWordNormal != null, decoration: const InputDecoration(labelText: 'Sua Tradução', border: OutlineInputBorder()), onChanged: (v) => setState((){})),
-          const SizedBox(height: 15),
-          ElevatedButton(onPressed: (_currentWordNormal == null || _answerCtrl.text.isEmpty) ? null : _verifyAnswerNormal, child: const Text('Confirmar Resposta')),
-          const SizedBox(height: 10),
-          Text(_resultTextNormal, style: TextStyle(fontSize: 18, color: _resultColorNormal, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-          const SizedBox(height: 10),
+    return Column(
+      children: [
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
+            child: Column(
+              children: [
+                FilledButton.icon(icon: const Icon(Icons.shuffle), label: const Text('Sortear Palavra'), onPressed: _drawWordNormal),
+                const SizedBox(height: 30),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Flexible(child: Text(_currentWordNormal?['ingles'] ?? 'Clique acima para sortear', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold), textAlign: TextAlign.center)),
+                    if (_currentWordNormal != null) IconButton(icon: const Icon(Icons.volume_up, color: Colors.blue, size: 28), tooltip: "Ouvir", onPressed: () => _falar(_currentWordNormal!['ingles'])),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                TextField(controller: _answerCtrl, enabled: _currentWordNormal != null, decoration: const InputDecoration(labelText: 'Sua Tradução', border: OutlineInputBorder()), onChanged: (v) => setState((){})),
+                const SizedBox(height: 15),
+                ElevatedButton(onPressed: (_currentWordNormal == null || _answerCtrl.text.isEmpty) ? null : _verifyAnswerNormal, child: const Text('Confirmar Resposta')),
+                const SizedBox(height: 10),
+                Text(_resultTextNormal, style: TextStyle(fontSize: 18, color: _resultColorNormal, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+                const SizedBox(height: 10),
 
-          if (_resultTextNormal.isNotEmpty && _currentWordNormal?['imagem'] != null && _currentWordNormal!['imagem'] != '')
-            Expanded(child: Image.file(File(_currentWordNormal!['imagem']), fit: BoxFit.contain))
-          else
-            const Spacer(),
-
-          GestureDetector(
-              onTap: () => _pageController.animateToPage(1, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut),
-              child: const Column(children: [ Text("Modo Papagaio", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)), Icon(Icons.keyboard_arrow_up, color: Colors.grey, size: 35) ])
+                if (_resultTextNormal.isNotEmpty && _currentWordNormal?['imagem'] != null && _currentWordNormal!['imagem'] != '')
+                  Expanded(child: Image.file(File(_currentWordNormal!['imagem']), fit: BoxFit.contain))
+              ],
+            ),
           ),
-          const SizedBox(height: 10),
-        ],
-      ),
+        ),
+        _buildMinimalArrow(Icons.keyboard_arrow_up, "Modo Papagaio", () => _pageController.animateToPage(1, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut)),
+      ],
     );
   }
 
   // --- Nível 2: Modo Papagaio ---
   Widget _buildParrotPractice() {
-    return Padding(
-      padding: const EdgeInsets.all(20.0),
-      child: Column(
-        children: [
-          GestureDetector(
-              onTap: () => _pageController.animateToPage(0, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut),
-              child: const Column(children: [ Icon(Icons.keyboard_arrow_down, color: Colors.grey, size: 35), Text("Modo Sorteio", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)) ])
-          ),
-          const SizedBox(height: 10),
-          const Row(mainAxisAlignment: MainAxisAlignment.center, children: [ Text('🦜', style: TextStyle(fontSize: 35)), SizedBox(width: 10), Text('Modo Papagaio', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)) ]),
-          const Divider(height: 15),
+    return Column(
+      children: [
+        _buildMinimalArrow(Icons.keyboard_arrow_down, "Modo Sorteio", () => _pageController.animateToPage(0, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut)),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20.0),
+            child: Column(
+              children: [
+                const Row(mainAxisAlignment: MainAxisAlignment.center, children: [ Text('🦜', style: TextStyle(fontSize: 30)), SizedBox(width: 10), Text('Modo Papagaio', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)) ]),
+                const Divider(height: 15),
 
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  Opacity(
-                      opacity: _isParrotPlaying ? 0.5 : 1.0,
-                      child: IgnorePointer(
-                          ignoring: _isParrotPlaying,
-                          child: Column(
-                            children: [
-                              DropdownButtonFormField<String>(decoration: const InputDecoration(labelText: 'Seu Idioma (Origem)', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 15, vertical: 12)), value: _parrotNativeLang, items: supportedLanguages.keys.map((l) => DropdownMenuItem(value: l, child: Text(l))).toList(), onChanged: (v) { setState(() => _parrotNativeLang = v!); _saveParrotSettings(); }),
-                              const SizedBox(height: 12),
-                              DropdownButtonFormField<String>(decoration: const InputDecoration(labelText: 'Filtro de Palavras', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 15, vertical: 12)), value: _parrotFilter, items: const [ DropdownMenuItem(value: 'todas', child: Text("Todas as palavras salvas")), DropdownMenuItem(value: '10', child: Text("Últimas 10 palavras")), DropdownMenuItem(value: '20', child: Text("Últimas 20 palavras")), DropdownMenuItem(value: '30', child: Text("Últimas 30 palavras")), DropdownMenuItem(value: 'custom', child: Text("Quantidade Personalizada...")) ], onChanged: (v) { setState(() => _parrotFilter = v!); _saveParrotSettings(); }),
-                              if (_parrotFilter == 'custom') Padding(padding: const EdgeInsets.only(top: 10), child: TextField(controller: _parrotCustomCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Digite a quantidade (> 0)', border: OutlineInputBorder(), isDense: true))),
-                              const SizedBox(height: 12),
-                              DropdownButtonFormField<double>(decoration: const InputDecoration(labelText: 'Velocidade da Voz', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 15, vertical: 12)), value: _parrotSpeed, items: const [ DropdownMenuItem(value: 0.5, child: Text("Lento (0.5x)")), DropdownMenuItem(value: 1.0, child: Text("Normal (1x)")), DropdownMenuItem(value: 1.5, child: Text("Rápido (1.5x)")), DropdownMenuItem(value: 2.0, child: Text("Turbo (2x)")) ], onChanged: (v) { setState(() => _parrotSpeed = v!); _saveParrotSettings(); }),
-                              const SizedBox(height: 12),
-                              DropdownButtonFormField<String>(decoration: const InputDecoration(labelText: 'Modo de Repetição', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 15, vertical: 12)), value: _parrotMode, items: const [ DropdownMenuItem(value: 'loop', child: Text("🔁 Em Loop (Sorteio Infinito)")), DropdownMenuItem(value: 'single', child: Text("➡️ 1 Sequência (Parar no fim)")) ], onChanged: (v) { setState(() => _parrotMode = v!); _saveParrotSettings(); }),
-                            ],
-                          )
-                      )
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        Opacity(
+                            opacity: _isParrotPlaying ? 0.5 : 1.0,
+                            child: IgnorePointer(
+                                ignoring: _isParrotPlaying,
+                                child: Column(
+                                  children: [
+                                    DropdownButtonFormField<String>(decoration: const InputDecoration(labelText: 'Seu Idioma (Origem)', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 15, vertical: 12)), value: _parrotNativeLang, items: supportedLanguages.keys.map((l) => DropdownMenuItem(value: l, child: Text(l))).toList(), onChanged: (v) { setState(() => _parrotNativeLang = v!); _saveParrotSettings(); }),
+                                    const SizedBox(height: 12),
+                                    DropdownButtonFormField<String>(decoration: const InputDecoration(labelText: 'Filtro de Palavras', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 15, vertical: 12)), value: _parrotFilter, items: const [ DropdownMenuItem(value: 'todas', child: Text("Todas as palavras salvas")), DropdownMenuItem(value: '10', child: Text("Últimas 10 palavras")), DropdownMenuItem(value: '20', child: Text("Últimas 20 palavras")), DropdownMenuItem(value: '30', child: Text("Últimas 30 palavras")), DropdownMenuItem(value: 'custom', child: Text("Quantidade Personalizada...")) ], onChanged: (v) { setState(() => _parrotFilter = v!); _saveParrotSettings(); }),
+                                    if (_parrotFilter == 'custom') Padding(padding: const EdgeInsets.only(top: 10), child: TextField(controller: _parrotCustomCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Digite a quantidade (> 0)', border: OutlineInputBorder(), isDense: true))),
+                                    const SizedBox(height: 12),
+                                    DropdownButtonFormField<double>(decoration: const InputDecoration(labelText: 'Velocidade da Voz', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 15, vertical: 12)), value: _parrotSpeed, items: const [ DropdownMenuItem(value: 0.5, child: Text("Lento (0.5x)")), DropdownMenuItem(value: 1.0, child: Text("Normal (1x)")), DropdownMenuItem(value: 1.5, child: Text("Rápido (1.5x)")), DropdownMenuItem(value: 2.0, child: Text("Turbo (2x)")) ], onChanged: (v) { setState(() => _parrotSpeed = v!); _saveParrotSettings(); }),
+                                    const SizedBox(height: 12),
+                                    DropdownButtonFormField<String>(decoration: const InputDecoration(labelText: 'Modo de Repetição', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 15, vertical: 12)), value: _parrotMode, items: const [ DropdownMenuItem(value: 'loop', child: Text("🔁 Em Loop (Sorteio Infinito)")), DropdownMenuItem(value: 'single', child: Text("➡️ 1 Sequência (Parar no fim)")) ], onChanged: (v) { setState(() => _parrotMode = v!); _saveParrotSettings(); }),
+                                  ],
+                                )
+                            )
+                        ),
+                        const SizedBox(height: 25),
+                        Text(_parrotCurrentWordDisplay.isEmpty ? 'Pronto para voar!' : _parrotCurrentWordDisplay, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.blue), textAlign: TextAlign.center),
+                        const SizedBox(height: 20),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 35),
-                  Text(_parrotCurrentWordDisplay.isEmpty ? 'Pronto para voar!' : _parrotCurrentWordDisplay, style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.blue), textAlign: TextAlign.center),
-                  const SizedBox(height: 20),
-                ],
-              ),
+                ),
+
+                SizedBox(width: double.infinity, height: 55, child: FilledButton.icon(style: FilledButton.styleFrom(backgroundColor: _isParrotPlaying ? Colors.red.shade700 : Colors.green.shade700), onPressed: _toggleParrot, icon: Icon(_isParrotPlaying ? Icons.stop : Icons.play_arrow, size: 26), label: Text(_isParrotPlaying ? "Parar Papagaio" : "Iniciar Papagaio", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)))),
+              ],
             ),
           ),
-
-          SizedBox(width: double.infinity, height: 65, child: FilledButton.icon(style: FilledButton.styleFrom(backgroundColor: _isParrotPlaying ? Colors.red.shade700 : Colors.green.shade700), onPressed: _toggleParrot, icon: Icon(_isParrotPlaying ? Icons.stop : Icons.play_arrow, size: 30), label: Text(_isParrotPlaying ? "Parar Papagaio" : "Iniciar Papagaio", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)))),
-          const SizedBox(height: 15),
-
-          GestureDetector(
-              onTap: () => _pageController.animateToPage(2, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut),
-              child: const Column(children: [ Text("Modo Língua Afiada", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)), Icon(Icons.keyboard_arrow_up, color: Colors.grey, size: 35) ])
-          ),
-        ],
-      ),
+        ),
+        _buildMinimalArrow(Icons.keyboard_arrow_up, "Língua Afiada", () => _pageController.animateToPage(2, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut)),
+      ],
     );
   }
 
   // --- Nível 3: Modo Língua Afiada 🗡️ ---
   Widget _buildSharpPractice() {
-    return Padding(
-      padding: const EdgeInsets.all(20.0),
-      child: Column(
-        children: [
-          GestureDetector(
-              onTap: () => _pageController.animateToPage(1, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut),
-              child: const Column(children: [ Icon(Icons.keyboard_arrow_down, color: Colors.grey, size: 35), Text("Modo Papagaio", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)) ])
-          ),
-          const SizedBox(height: 10),
-          const Row(mainAxisAlignment: MainAxisAlignment.center, children: [ Text('🗡️', style: TextStyle(fontSize: 35)), SizedBox(width: 10), Text('Língua Afiada', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)) ]),
-          const Divider(height: 15),
+    return Column(
+      children: [
+        _buildMinimalArrow(Icons.keyboard_arrow_down, "Modo Papagaio", () => _pageController.animateToPage(1, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut)),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20.0),
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  const Row(mainAxisAlignment: MainAxisAlignment.center, children: [ Text('🗡️', style: TextStyle(fontSize: 30)), SizedBox(width: 10), Text('Língua Afiada', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)) ]),
+                  const Divider(height: 15),
 
-          // Filtro Exclusivo do Modo Afiado
-          Row(
-            children: [
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                    decoration: const InputDecoration(labelText: 'Filtro de Sorteio', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 10), isDense: true),
-                    value: _sharpFilter,
-                    items: const [ DropdownMenuItem(value: 'todas', child: Text("Todas as palavras")), DropdownMenuItem(value: '10', child: Text("Últimas 10")), DropdownMenuItem(value: '20', child: Text("Últimas 20")), DropdownMenuItem(value: '30', child: Text("Últimas 30")), DropdownMenuItem(value: 'custom', child: Text("Personalizado")) ],
-                    onChanged: (v) { setState(() => _sharpFilter = v!); _saveSharpSettings(); }
-                ),
-              ),
-              if (_sharpFilter == 'custom')
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 10),
-                    child: TextField(controller: _sharpCustomCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Qtd (>0)', border: OutlineInputBorder(), isDense: true)),
+                  // Filtro corrigido em coluna para não espremer
+                  DropdownButtonFormField<String>(
+                      decoration: const InputDecoration(labelText: 'Filtro de Sorteio', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 12), isDense: true),
+                      value: _sharpFilter,
+                      items: const [ DropdownMenuItem(value: 'todas', child: Text("Todas as palavras")), DropdownMenuItem(value: '10', child: Text("Últimas 10")), DropdownMenuItem(value: '20', child: Text("Últimas 20")), DropdownMenuItem(value: '30', child: Text("Últimas 30")), DropdownMenuItem(value: 'custom', child: Text("Personalizado")) ],
+                      onChanged: (v) { setState(() => _sharpFilter = v!); _saveSharpSettings(); }
                   ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 25),
+                  if (_sharpFilter == 'custom')
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: TextField(controller: _sharpCustomCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Quantidade Personalizada (>0)', border: OutlineInputBorder(), isDense: true)),
+                    ),
+                  const SizedBox(height: 20),
 
-          FilledButton.icon(icon: const Icon(Icons.shuffle), label: const Text('Sortear Nova Palavra'), onPressed: _drawWordSharp),
-          const SizedBox(height: 40),
+                  FilledButton.icon(icon: const Icon(Icons.shuffle), label: const Text('Sortear Nova Palavra'), onPressed: _drawWordSharp),
+                  const SizedBox(height: 30),
 
-          // Área da Palavra
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Flexible(child: Text(_currentWordSharp?['ingles'] ?? 'Sorteie para começar', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold), textAlign: TextAlign.center)),
-              if (_currentWordSharp != null) IconButton(icon: const Icon(Icons.volume_up, color: Colors.blue, size: 35), tooltip: "Ouvir Novamente", onPressed: () => _falar(_currentWordSharp!['ingles'])),
-            ],
-          ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Flexible(child: Text(_currentWordSharp?['ingles'] ?? 'Sorteie para começar', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold), textAlign: TextAlign.center)),
+                      if (_currentWordSharp != null) IconButton(icon: const Icon(Icons.volume_up, color: Colors.blue, size: 35), tooltip: "Ouvir Novamente", onPressed: () => _falar(_currentWordSharp!['ingles'])),
+                    ],
+                  ),
 
-          if (_currentWordSharp != null) ...[
-            const SizedBox(height: 10),
-            Text(_currentWordSharp!['traducoes'].toString().replaceAll('|', ' ou '), style: const TextStyle(fontSize: 16, color: Colors.grey)),
-          ],
+                  if (_currentWordSharp != null) ...[
+                    const SizedBox(height: 10),
+                    Text(_currentWordSharp!['traducoes'].toString().replaceAll('|', ' ou '), style: const TextStyle(fontSize: 16, color: Colors.grey)),
+                  ],
 
-          const Spacer(),
+                  const SizedBox(height: 30),
+                  Text(_sharpResultText, style: TextStyle(fontSize: 18, color: _sharpResultColor, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+                  const SizedBox(height: 20),
 
-          // Resultado e O que ele entendeu
-          Text(_sharpResultText, style: TextStyle(fontSize: 20, color: _sharpResultColor, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
-          const SizedBox(height: 30),
-
-          // Botão Gigante de Microfone
-          GestureDetector(
-            onTap: _currentWordSharp == null ? null : _listenSharp,
-            child: CircleAvatar(
-              radius: 50,
-              backgroundColor: _currentWordSharp == null ? Colors.grey : (_isListening ? Colors.red : Colors.blue),
-              child: Icon(_isListening ? Icons.mic : Icons.mic_none, size: 50, color: Colors.white),
+                  // Botão de Microfone muito menor
+                  GestureDetector(
+                    onTap: _currentWordSharp == null ? null : _listenSharp,
+                    child: CircleAvatar(
+                      radius: 35, // Tamanho reduzido para evitar transbordamento
+                      backgroundColor: _currentWordSharp == null ? Colors.grey : (_isListening ? Colors.red : Colors.blue),
+                      child: Icon(_isListening ? Icons.mic : Icons.mic_none, size: 35, color: Colors.white),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(_isListening ? "A escutar... Fale agora!" : (_currentWordSharp == null ? "" : "Toque para falar"), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  const SizedBox(height: 20),
+                ],
+              ),
             ),
           ),
-          const SizedBox(height: 15),
-          Text(_isListening ? "A escutar... Fale agora!" : (_currentWordSharp == null ? "" : "Toque para falar"), style: const TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 30),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -873,7 +906,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
 }
 
 // ==========================================
-// ABA 1: REGISTRO (Sem alterações visuais, apenas base)
+// ABA 1: REGISTRO
 // ==========================================
 class RegisterTab extends StatefulWidget {
   final String currentLang;
@@ -987,7 +1020,7 @@ class _RegisterTabState extends State<RegisterTab> {
 }
 
 // ==========================================
-// ABA 3: BIBLIOTECA (Sem alterações)
+// ABA 3: BIBLIOTECA
 // ==========================================
 class LibraryTab extends StatefulWidget {
   final String currentLang;
