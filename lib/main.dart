@@ -12,7 +12,7 @@ import 'dart:io';
 import 'dart:math';
 
 // ==========================================
-// CONFIGURAÇÕES DE IDIOMAS SUPORTADOS
+// CONFIGURAÇÕES GLOBAIS E TRADUÇÃO DO APP
 // ==========================================
 class AppLanguage {
   final String name;
@@ -31,22 +31,138 @@ const Map<String, AppLanguage> supportedLanguages = {
 };
 
 final ValueNotifier<ThemeMode> appThemeMode = ValueNotifier(ThemeMode.light);
-final ValueNotifier<String> appLanguage = ValueNotifier('Inglês');
+final ValueNotifier<String> appLanguage = ValueNotifier('Inglês'); // Idioma a ESTUDAR
+final ValueNotifier<String> appNativeLanguage = ValueNotifier('Português'); // Idioma NATIVO da interface
 final ValueNotifier<bool> appFeedbackEnabled = ValueNotifier(true);
+
+// --- MOTOR DE TRADUÇÃO GLOBAL ---
+String t(String text) {
+  String code = supportedLanguages[appNativeLanguage.value]?.transCode ?? 'pt';
+  if (code == 'pt') return text; // Se for português, retorna o texto original
+
+  const Map<String, Map<String, String>> dict = {
+    // Idiomas
+    'Inglês': {'en': 'English', 'de': 'Englisch', 'es': 'Inglés', 'fr': 'Anglais'},
+    'Alemão': {'en': 'German', 'de': 'Deutsch', 'es': 'Alemán', 'fr': 'Allemand'},
+    'Espanhol': {'en': 'Spanish', 'de': 'Spanisch', 'es': 'Español', 'fr': 'Espagnol'},
+    'Português': {'en': 'Portuguese', 'de': 'Portugiesisch', 'es': 'Portugués', 'fr': 'Portugais'},
+    'Francês': {'en': 'French', 'de': 'Französisch', 'es': 'Francés', 'fr': 'Français'},
+
+    // Abas e Menus
+    'Novo': {'en': 'New', 'de': 'Neu', 'es': 'Nuevo', 'fr': 'Nouveau'},
+    'Praticar': {'en': 'Practice', 'de': 'Üben', 'es': 'Practicar', 'fr': 'Pratiquer'},
+    'Biblioteca': {'en': 'Library', 'de': 'Bibliothek', 'es': 'Biblioteca', 'fr': 'Bibliothèque'},
+    'Configurações': {'en': 'Settings', 'de': 'Einstellungen', 'es': 'Ajustes', 'fr': 'Paramètres'},
+
+    // Tela Configurações
+    'Idioma de Estudo Principal': {'en': 'Main Study Language', 'de': 'Hauptlernsprache', 'es': 'Idioma de Estudio', 'fr': "Langue d'étude principale"},
+    'Seu Idioma (Origem)': {'en': 'Your Native Language', 'de': 'Deine Muttersprache', 'es': 'Tu Idioma Nativo', 'fr': 'Votre Langue Maternelle'},
+    'Aprender': {'en': 'Learn', 'de': 'Lernen', 'es': 'Aprender', 'fr': 'Apprendre'},
+    'Falar': {'en': 'Speak', 'de': 'Sprechen', 'es': 'Hablar', 'fr': 'Parler'},
+    'Preferências': {'en': 'Preferences', 'de': 'Präferenzen', 'es': 'Preferencias', 'fr': 'Préférences'},
+    'Modo Noturno': {'en': 'Dark Mode', 'de': 'Nachtmodus', 'es': 'Modo Oscuro', 'fr': 'Mode Sombre'},
+    'Som e Vibração': {'en': 'Sound & Vibration', 'de': 'Ton & Vibration', 'es': 'Sonido y Vibración', 'fr': 'Son et Vibration'},
+    'Filtro de Sorteio (Global)': {'en': 'Global Draw Filter', 'de': 'Globaler Ziehungsfilter', 'es': 'Filtro de Sorteo (Global)', 'fr': 'Filtre de Tirage'},
+    'Todas as palavras': {'en': 'All words', 'de': 'Alle Wörter', 'es': 'Todas las palabras', 'fr': 'Tous les mots'},
+    'Últimas 10': {'en': 'Last 10', 'de': 'Letzte 10', 'es': 'Últimas 10', 'fr': 'Les 10 derniers'},
+    'Últimas 20': {'en': 'Last 20', 'de': 'Letzte 20', 'es': 'Últimas 20', 'fr': 'Les 20 derniers'},
+    'Últimas 30': {'en': 'Last 30', 'de': 'Letzte 30', 'es': 'Últimas 30', 'fr': 'Les 30 derniers'},
+    'Personalizado': {'en': 'Custom', 'de': 'Benutzerdef.', 'es': 'Personalizado', 'fr': 'Personnalisé'},
+    'Salvar': {'en': 'Save', 'de': 'Speichern', 'es': 'Guardar', 'fr': 'Enregistrer'},
+    'Configurações salvas!': {'en': 'Settings saved!', 'de': 'Gespeichert!', 'es': '¡Ajustes guardados!', 'fr': 'Paramètres enregistrés !'},
+
+    // Registro
+    'Registar Palavra': {'en': 'Register Word', 'de': 'Wort registrieren', 'es': 'Registrar Palabra', 'fr': 'Enregistrer le mot'},
+    'Palavra em': {'en': 'Word in', 'de': 'Wort auf', 'es': 'Palabra en', 'fr': 'Mot en'},
+    'Significado / Tradução': {'en': 'Meaning / Translation', 'de': 'Bedeutung / Übersetzung', 'es': 'Significado / Traducción', 'fr': 'Signification / Traduction'},
+    'Câmera': {'en': 'Camera', 'de': 'Kamera', 'es': 'Cámara', 'fr': 'Caméra'},
+    'Galeria': {'en': 'Gallery', 'de': 'Galerie', 'es': 'Galería', 'fr': 'Galerie'},
+    'Confirmar': {'en': 'Confirm', 'de': 'Bestätigen', 'es': 'Confirmar', 'fr': 'Confirmer'},
+    'Remover Foto': {'en': 'Remove Photo', 'de': 'Foto entfernen', 'es': 'Eliminar Foto', 'fr': 'Supprimer la photo'},
+    'Preencha a palavra e a tradução antes de salvar.': {'en': 'Fill word and translation before saving.', 'de': 'Bitte Wort und Übersetzung eingeben.', 'es': 'Rellene palabra y traducción antes de guardar.', 'fr': 'Remplissez le mot et la traduction avant d\'enregistrer.'},
+    'Palavra salva com sucesso!': {'en': 'Word saved successfully!', 'de': 'Wort erfolgreich gespeichert!', 'es': '¡Palabra guardada con éxito!', 'fr': 'Mot enregistré avec succès !'},
+
+    // Prática (Clássico & Comum)
+    'Modo Clássico': {'en': 'Classic Mode', 'de': 'Klassischer Modus', 'es': 'Modo Clásico', 'fr': 'Mode Classique'},
+    'Sortear Palavra': {'en': 'Draw Word', 'de': 'Wort ziehen', 'es': 'Sortear Palabra', 'fr': 'Tirer un mot'},
+    'Clique acima para sortear': {'en': 'Click above to draw', 'de': 'Klicken um zu ziehen', 'es': 'Haz clic arriba para sortear', 'fr': 'Cliquez ci-dessus pour tirer'},
+    'Sua Tradução': {'en': 'Your Translation', 'de': 'Deine Übersetzung', 'es': 'Tu Traducción', 'fr': 'Votre Traduction'},
+    'Responder em': {'en': 'Answer in', 'de': 'Antworten auf', 'es': 'Responder en', 'fr': 'Répondre en'},
+    'Confirmar Resposta': {'en': 'Confirm Answer', 'de': 'Antwort bestätigen', 'es': 'Confirmar Respuesta', 'fr': 'Confirmer la réponse'},
+    'Resposta Correta! 🎉': {'en': 'Correct Answer! 🎉', 'de': 'Richtige Antwort! 🎉', 'es': '¡Respuesta Correcta! 🎉', 'fr': 'Bonne Réponse ! 🎉'},
+    'Incorreta. O correto é:': {'en': 'Incorrect. Correct is:', 'de': 'Falsch. Richtig ist:', 'es': 'Incorrecta. Lo correcto es:', 'fr': 'Incorrect. La bonne réponse est :'},
+    'ou': {'en': 'or', 'de': 'oder', 'es': 'o', 'fr': 'ou'},
+    'Desempenho': {'en': 'Performance', 'de': 'Leistung', 'es': 'Rendimiento', 'fr': 'Performance'},
+
+    // Papagaio
+    'Modo Papagaio': {'en': 'Parrot Mode', 'de': 'Papageienmodus', 'es': 'Modo Loro', 'fr': 'Mode Perroquet'},
+    'Filtro de Palavras': {'en': 'Words Filter', 'de': 'Wortfilter', 'es': 'Filtro de Palabras', 'fr': 'Filtre de Mots'},
+    'Velocidade da Voz': {'en': 'Voice Speed', 'de': 'Sprachgeschwindigkeit', 'es': 'Velocidad de Voz', 'fr': 'Vitesse de la voix'},
+    'Modo de Repetição': {'en': 'Repeat Mode', 'de': 'Wiederholungsmodus', 'es': 'Modo de Repetición', 'fr': 'Mode de Répétition'},
+    'Em Loop (Sorteio Infinito)': {'en': 'In Loop (Infinite Draw)', 'de': 'In Schleife', 'es': 'En Bucle (Sorteo Infinito)', 'fr': 'En Boucle'},
+    '1 Sequência (Parar no fim)': {'en': '1 Sequence (Stop at end)', 'de': '1 Sequenz', 'es': '1 Secuencia', 'fr': '1 Séquence'},
+    'Iniciar Papagaio': {'en': 'Start Parrot', 'de': 'Papagei starten', 'es': 'Iniciar Loro', 'fr': 'Démarrer le Perroquet'},
+    'Parar Papagaio': {'en': 'Stop Parrot', 'de': 'Papagei stoppen', 'es': 'Detener Loro', 'fr': 'Arrêter le Perroquet'},
+    'Pronto para voar!': {'en': 'Ready to fly!', 'de': 'Bereit zum Fliegen!', 'es': '¡Listo para volar!', 'fr': 'Prêt à voler !'},
+    'Sua biblioteca está vazia!': {'en': 'Your library is empty!', 'de': 'Deine Bibliothek ist leer!', 'es': '¡Tu biblioteca está vacía!', 'fr': 'Votre bibliothèque est vide !'},
+    'Sequência Concluída!': {'en': 'Sequence Completed!', 'de': 'Sequenz abgeschlossen!', 'es': '¡Secuencia Completada!', 'fr': 'Séquence Terminée !'},
+
+    // Língua Afiada
+    'Língua Afiada': {'en': 'Sharp Tongue', 'de': 'Scharfe Zunge', 'es': 'Lengua Afilada', 'fr': 'Langue Pendue'},
+    'Sortear Nova Palavra': {'en': 'Draw New Word', 'de': 'Neues Wort ziehen', 'es': 'Sortear Nueva Palabra', 'fr': 'Tirer un nouveau mot'},
+    'Sorteie para começar': {'en': 'Draw to start', 'de': 'Ziehen um zu starten', 'es': 'Sortea para empezar', 'fr': 'Tirez pour commencer'},
+    'Toque para falar': {'en': 'Tap to speak', 'de': 'Tippen zum Sprechen', 'es': 'Toca para hablar', 'fr': 'Appuyez pour parler'},
+    'A escutar... Fale agora!': {'en': 'Listening... Speak now!', 'de': 'Höre zu... Sprich jetzt!', 'es': 'Escuchando... ¡Habla ahora!', 'fr': 'Écoute... Parlez maintenant !'},
+    'Pronúncia Perfeita! 🎉': {'en': 'Perfect Pronunciation! 🎉', 'de': 'Perfekte Aussprache! 🎉', 'es': '¡Pronunciación Perfecta! 🎉', 'fr': 'Prononciation Parfaite ! 🎉'},
+    'Entendemos:': {'en': 'We heard:', 'de': 'Wir haben verstanden:', 'es': 'Entendimos:', 'fr': 'Nous avons compris :'},
+
+    // Desempenho
+    'Seu Desempenho': {'en': 'Your Performance', 'de': 'Deine Leistung', 'es': 'Tu Rendimiento', 'fr': 'Votre Performance'},
+    'Desempenho de Hoje': {'en': 'Performance Today', 'de': 'Leistung Heute', 'es': 'Rendimiento de Hoy', 'fr': "Performances d'aujourd'hui"},
+    'Últimos 7 Dias': {'en': 'Last 7 Days', 'de': 'Letzte 7 Tage', 'es': 'Últimos 7 Días', 'fr': 'Les 7 Derniers Jours'},
+    'Histórico Mensal': {'en': 'Monthly History', 'de': 'Monatlicher Verlauf', 'es': 'Historial Mensual', 'fr': 'Historique Mensuel'},
+    'Perguntas Respondidas:': {'en': 'Questions Answered:', 'de': 'Beantwortete Fragen:', 'es': 'Preguntas Respondidas:', 'fr': 'Questions répondues :'},
+    'Acertos / Erros:': {'en': 'Hits / Misses:', 'de': 'Treffer / Fehler:', 'es': 'Aciertos / Errores:', 'fr': 'Réussites / Échecs :'},
+    'Combos Especiais 🎉:': {'en': 'Special Combos 🎉:', 'de': 'Spezielle Kombos 🎉:', 'es': 'Combos Especiales 🎉:', 'fr': 'Combos Spéciaux 🎉:'},
+    'Tempo no Papagaio 🦜:': {'en': 'Parrot Time 🦜:', 'de': 'Papageienzeit 🦜:', 'es': 'Tiempo en Loro 🦜:', 'fr': 'Temps Perroquet 🦜:'},
+
+    // Biblioteca
+    'Sua Biblioteca em': {'en': 'Your Library in', 'de': 'Deine Bibliothek in', 'es': 'Tu Biblioteca en', 'fr': 'Votre Bibliothèque en'},
+    'registradas': {'en': 'registered', 'de': 'registriert', 'es': 'registradas', 'fr': 'enregistrées'},
+    'Pesquisar...': {'en': 'Search...', 'de': 'Suchen...', 'es': 'Buscar...', 'fr': 'Rechercher...'},
+    'Nenhuma palavra encontrada.': {'en': 'No words found.', 'de': 'Keine Wörter gefunden.', 'es': 'No se encontraron palabras.', 'fr': 'Aucun mot trouvé.'},
+    'Editar Palavra': {'en': 'Edit Word', 'de': 'Wort bearbeiten', 'es': 'Editar Palabra', 'fr': 'Modifier le mot'},
+    'Salvar Alterações': {'en': 'Save Changes', 'de': 'Änderungen speichern', 'es': 'Guardar Cambios', 'fr': 'Enregistrer les modifications'},
+    'Significado': {'en': 'Meaning', 'de': 'Bedeutung', 'es': 'Significado', 'fr': 'Signification'},
+    'Palavra Principal': {'en': 'Main Word', 'de': 'Hauptwort', 'es': 'Palabra Principal', 'fr': 'Mot Principal'},
+    'Significados Registados:': {'en': 'Registered Meanings:', 'de': 'Registrierte Bedeutungen:', 'es': 'Significados Registrados:', 'fr': 'Significations Enregistrées :'},
+    'Alterar Foto': {'en': 'Change Photo', 'de': 'Foto ändern', 'es': 'Cambiar Foto', 'fr': 'Changer la photo'},
+    'Adicionar Foto': {'en': 'Add Photo', 'de': 'Foto hinzufügen', 'es': 'Añadir Foto', 'fr': 'Ajouter une photo'},
+    'Remover Imagem': {'en': 'Remove Image', 'de': 'Bild entfernen', 'es': 'Eliminar Imagen', 'fr': 'Supprimer l\'image'},
+    'Excluir Palavra': {'en': 'Delete Word', 'de': 'Wort löschen', 'es': 'Eliminar Palabra', 'fr': 'Supprimer le mot'},
+    'Cancelar': {'en': 'Cancel', 'de': 'Abbrechen', 'es': 'Cancelar', 'fr': 'Annuler'},
+    'Sim': {'en': 'Yes', 'de': 'Ja', 'es': 'Sí', 'fr': 'Oui'},
+    'Excluir': {'en': 'Delete', 'de': 'Löschen', 'es': 'Eliminar', 'fr': 'Supprimer'},
+  };
+  return dict[text]?[code] ?? text;
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   final db = DatabaseHelper.instance;
-  await db.limparDadosAntigos(); // Limpeza automática de dados com +30 dias
+  await db.limparDadosAntigos();
 
   String temaSalvo = await db.getConfig('tema');
   String idiomaSalvo = await db.getConfig('idioma_atual');
+  String idiomaNativoSalvo = await db.getConfig('idioma_nativo'); // Novo
   String feedbackSalvo = await db.getConfig('feedback_ativo');
 
   appThemeMode.value = (temaSalvo == 'dark') ? ThemeMode.dark : ThemeMode.light;
   if (idiomaSalvo.isNotEmpty && supportedLanguages.containsKey(idiomaSalvo)) {
     appLanguage.value = idiomaSalvo;
+  }
+  if (idiomaNativoSalvo.isNotEmpty && supportedLanguages.containsKey(idiomaNativoSalvo)) {
+    appNativeLanguage.value = idiomaNativoSalvo; // Novo
   }
   if (feedbackSalvo.isNotEmpty) {
     appFeedbackEnabled.value = (feedbackSalvo == 'true');
@@ -56,7 +172,7 @@ void main() async {
 }
 
 // ==========================================
-// BANCO DE DADOS (Versão 6 - Motor de Estatísticas)
+// BANCO DE DADOS
 // ==========================================
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
@@ -76,7 +192,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       fullPath,
-      version: 6,
+      version: 7,
       onCreate: (db, version) async {
         await db.execute('''CREATE TABLE palavras (id INTEGER PRIMARY KEY AUTOINCREMENT, ingles TEXT NOT NULL, traducao TEXT NOT NULL, imagem TEXT, lingua TEXT NOT NULL DEFAULT 'Inglês')''');
         await db.execute('''CREATE TABLE configuracoes (chave TEXT PRIMARY KEY, valor TEXT)''');
@@ -86,6 +202,7 @@ class DatabaseHelper {
         await db.insert('configuracoes', {'chave': 'filtro', 'valor': 'todas'});
         await db.insert('configuracoes', {'chave': 'tema', 'valor': 'light'});
         await db.insert('configuracoes', {'chave': 'idioma_atual', 'valor': 'Inglês'});
+        await db.insert('configuracoes', {'chave': 'idioma_nativo', 'valor': 'Português'}); // Inserido padrão nativo
         await db.insert('configuracoes', {'chave': 'feedback_ativo', 'valor': 'true'});
       },
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -98,15 +215,12 @@ class DatabaseHelper {
     );
   }
 
-  // --- MOTOR DE ESTATÍSTICAS ---
   Future<void> registrarAtividade(String coluna, [int valor = 1]) async {
     final db = await instance.database;
     String hoje = DateTime.now().toIso8601String().substring(0, 10);
     String mes = hoje.substring(0, 7);
-
     await db.execute('INSERT OR IGNORE INTO estatisticas (data) VALUES (?)', [hoje]);
     await db.execute('INSERT OR IGNORE INTO estatisticas_mensais (mes) VALUES (?)', [mes]);
-
     await db.execute('UPDATE estatisticas SET $coluna = $coluna + ? WHERE data = ?', [valor, hoje]);
     await db.execute('UPDATE estatisticas_mensais SET $coluna = $coluna + ? WHERE mes = ?', [valor, mes]);
   }
@@ -127,15 +241,8 @@ class DatabaseHelper {
   Future<Map<String, dynamic>> getEstatisticasSemana() async {
     final db = await instance.database;
     String limite = DateTime.now().subtract(const Duration(days: 7)).toIso8601String().substring(0, 10);
-    final res = await db.rawQuery('''
-      SELECT SUM(respondidas) as respondidas, SUM(acertos) as acertos, SUM(erros) as erros, 
-             SUM(especiais) as especiais, SUM(tempo_papagaio) as tempo_papagaio 
-      FROM estatisticas WHERE data >= ?
-    ''', [limite]);
-
-    if (res.isNotEmpty && res.first['respondidas'] != null) {
-      return res.first;
-    }
+    final res = await db.rawQuery('''SELECT SUM(respondidas) as respondidas, SUM(acertos) as acertos, SUM(erros) as erros, SUM(especiais) as especiais, SUM(tempo_papagaio) as tempo_papagaio FROM estatisticas WHERE data >= ?''', [limite]);
+    if (res.isNotEmpty && res.first['respondidas'] != null) return res.first;
     return {'respondidas':0, 'acertos':0, 'erros':0, 'especiais':0, 'tempo_papagaio':0};
   }
 
@@ -199,13 +306,19 @@ class MemoryWordApp extends StatelessWidget {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: appThemeMode,
       builder: (context, currentMode, child) {
-        return MaterialApp(
-          title: 'MemoryWord',
-          debugShowCheckedModeBanner: false,
-          theme: ThemeData.light(),
-          darkTheme: ThemeData.dark(),
-          themeMode: currentMode,
-          home: const MainScreen(),
+        // Envolvemos toda a app para reconstruir a UI quando o idioma Nativo muda
+        return ValueListenableBuilder<String>(
+          valueListenable: appNativeLanguage,
+          builder: (context, currentNativeLang, child) {
+            return MaterialApp(
+              title: 'MemoryWord',
+              debugShowCheckedModeBanner: false,
+              theme: ThemeData.light(),
+              darkTheme: ThemeData.dark(),
+              themeMode: currentMode,
+              home: const MainScreen(),
+            );
+          },
         );
       },
     );
@@ -253,7 +366,7 @@ class _MainScreenState extends State<MainScreen> {
           builder: (context, lang, child) { return Center(child: Text(supportedLanguages[lang]?.flag ?? '🌐', style: const TextStyle(fontSize: 26))); },
         ),
         title: const Text('MemoryWord'), centerTitle: true,
-        actions: [ IconButton(icon: const Icon(Icons.settings), tooltip: "Configurações", onPressed: _abrirConfiguracoes) ],
+        actions: [ IconButton(icon: const Icon(Icons.settings), tooltip: t("Configurações"), onPressed: _abrirConfiguracoes) ],
       ),
       body: ValueListenableBuilder<String>(
         valueListenable: appLanguage,
@@ -272,10 +385,10 @@ class _MainScreenState extends State<MainScreen> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (index) { _mainPageController.animateToPage(index, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut); },
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.add), label: 'Novo'),
-          BottomNavigationBarItem(icon: Icon(Icons.quiz), label: 'Praticar'),
-          BottomNavigationBarItem(icon: Icon(Icons.library_books), label: 'Biblioteca'),
+        items: [
+          BottomNavigationBarItem(icon: const Icon(Icons.add), label: t('Novo')),
+          BottomNavigationBarItem(icon: const Icon(Icons.quiz), label: t('Praticar')),
+          BottomNavigationBarItem(icon: const Icon(Icons.library_books), label: t('Biblioteca')),
         ],
       ),
     );
@@ -283,7 +396,7 @@ class _MainScreenState extends State<MainScreen> {
 }
 
 // ==========================================
-// ABA 2: PRÁTICA (AGORA COM TRAVAS E AVANÇO AUTOMÁTICO)
+// ABA 2: PRÁTICA
 // ==========================================
 class PracticeTab extends StatefulWidget {
   final String currentLang;
@@ -298,34 +411,28 @@ class _PracticeTabState extends State<PracticeTab> {
   final FlutterTts _flutterTts = FlutterTts();
   late stt.SpeechToText _speech;
 
-  // OS 3 LEITORES ISOLADOS
   final AudioPlayer _audioCorrect = AudioPlayer();
   final AudioPlayer _audioSpecial = AudioPlayer();
   final AudioPlayer _audioWrong = AudioPlayer();
 
   final Stopwatch _parrotStopwatch = Stopwatch();
 
-  // --- SISTEMA DE STREAK (COMBO) ---
   int _streak = 0;
   int _nextMilestone = 10;
   bool _showSpecialOverlay = false;
   int _overlayPoints = 0;
 
-  // Variáveis do Modo Normal
   Map<String, dynamic>? _currentWordNormal;
   final _answerCtrl = TextEditingController();
   String _resultTextNormal = '';
   Color _resultColorNormal = Colors.black;
-  bool _hasAnsweredNormal = false; // TRAVA DE RESPOSTA NORMAL
+  bool _hasAnsweredNormal = false;
 
-  // --- NOVAS VARIÁVEIS PARA O MODO INVERSO ---
   bool _isReversedNormal = false;
   List<Map<String, dynamic>> _allFetchedWordsNormal = [];
   String _questionToDisplay = '';
   List<String> _validAnswersNormal = [];
 
-  // Variáveis do Modo Papagaio
-  String _parrotNativeLang = 'Português';
   String _parrotFilter = 'todas';
   String _parrotCustomVal = '';
   String _parrotMode = 'loop';
@@ -334,7 +441,6 @@ class _PracticeTabState extends State<PracticeTab> {
   bool _isParrotPlaying = false;
   String _parrotCurrentWordDisplay = '';
 
-  // Variáveis do Modo Língua Afiada
   Map<String, dynamic>? _currentWordSharp;
   String _sharpFilter = 'todas';
   String _sharpCustomVal = '';
@@ -343,7 +449,7 @@ class _PracticeTabState extends State<PracticeTab> {
   String _spokenText = '';
   String _sharpResultText = '';
   Color _sharpResultColor = Colors.black;
-  bool _hasAnsweredSharp = false; // TRAVA DE RESPOSTA AFIADA
+  bool _hasAnsweredSharp = false;
 
   @override
   void initState() {
@@ -353,7 +459,6 @@ class _PracticeTabState extends State<PracticeTab> {
     _parrotCustomCtrl.addListener(() { _parrotCustomVal = _parrotCustomCtrl.text.trim(); _saveSettings(); });
     _sharpCustomCtrl.addListener(() { _sharpCustomVal = _sharpCustomCtrl.text.trim(); _saveSettings(); });
 
-    // Preparar os 3 áudios
     _audioCorrect.setSource(AssetSource('correct.mp3'));
     _audioSpecial.setSource(AssetSource('special.mp3'));
     _audioWrong.setSource(AssetSource('wrong.mp3'));
@@ -384,57 +489,32 @@ class _PracticeTabState extends State<PracticeTab> {
     super.dispose();
   }
 
-  // --- REPRODUÇÃO DE ÁUDIOS ---
-  void _playCorrectSound() async {
-    if (!appFeedbackEnabled.value) return;
-    try { await _audioCorrect.stop(); await _audioCorrect.play(AssetSource('correct.mp3')); } catch (e) {}
-  }
+  void _playCorrectSound() async { if (!appFeedbackEnabled.value) return; try { await _audioCorrect.stop(); await _audioCorrect.play(AssetSource('correct.mp3')); } catch (e) {} }
+  void _playSpecialSound() async { if (!appFeedbackEnabled.value) return; try { await _audioSpecial.stop(); await _audioSpecial.play(AssetSource('special.mp3')); } catch (e) {} }
+  void _playWrongSound() async { if (!appFeedbackEnabled.value) return; try { await _audioWrong.stop(); await _audioWrong.play(AssetSource('wrong.mp3')); } catch (e) {} }
 
-  void _playSpecialSound() async {
-    if (!appFeedbackEnabled.value) return;
-    try { await _audioSpecial.stop(); await _audioSpecial.play(AssetSource('special.mp3')); } catch (e) {}
-  }
-
-  void _playWrongSound() async {
-    if (!appFeedbackEnabled.value) return;
-    try { await _audioWrong.stop(); await _audioWrong.play(AssetSource('wrong.mp3')); } catch (e) {}
-  }
-
-  // --- GESTÃO DE COMBOS E ESTATÍSTICAS ---
   void _handleAnswer(bool isCorrect) {
     DatabaseHelper.instance.registrarAtividade('respondidas');
-
     if (isCorrect) {
       DatabaseHelper.instance.registrarAtividade('acertos');
       _streak++;
-
       if (_streak == _nextMilestone) {
         DatabaseHelper.instance.registrarAtividade('especiais');
         _triggerSpecialOverlay(_nextMilestone);
-
-        if (_nextMilestone < 30) {
-          _nextMilestone += 10;
-        } else {
-          _nextMilestone *= 2;
-        }
-      } else {
-        _playCorrectSound();
-      }
+        _nextMilestone = _nextMilestone < 30 ? _nextMilestone + 10 : _nextMilestone * 2;
+      } else { _playCorrectSound(); }
     } else {
       DatabaseHelper.instance.registrarAtividade('erros');
-      _streak = 0;
-      _nextMilestone = 10;
-      _playWrongSound(); // Toca som de erro
-      if (appFeedbackEnabled.value) HapticFeedback.vibrate(); // Vibração garantida
+      _streak = 0; _nextMilestone = 10;
+      _playWrongSound();
+      if (appFeedbackEnabled.value) HapticFeedback.vibrate();
     }
   }
 
   void _triggerSpecialOverlay(int points) {
     _playSpecialSound();
     setState(() { _overlayPoints = points; _showSpecialOverlay = true; });
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) setState(() => _showSpecialOverlay = false);
-    });
+    Future.delayed(const Duration(seconds: 3), () { if (mounted) setState(() => _showSpecialOverlay = false); });
   }
 
   Future<void> _falar(String texto, {double rate = 0.5}) async {
@@ -461,10 +541,9 @@ class _PracticeTabState extends State<PracticeTab> {
     );
   }
 
-  // --- Funções MODO NORMAL (Com Auto-Avanço e Modo Inverso) ---
   Future<void> _drawWordNormal() async {
     final words = await DatabaseHelper.instance.fetchCustomWords(widget.currentLang, 'todas', '');
-    if (words.isEmpty) { setState(() { _resultTextNormal = 'Sua biblioteca está vazia.'; _resultColorNormal = Colors.blue; }); return; }
+    if (words.isEmpty) { setState(() { _resultTextNormal = t('Sua biblioteca está vazia!'); _resultColorNormal = Colors.blue; }); return; }
 
     setState(() {
       _allFetchedWordsNormal = words;
@@ -474,15 +553,11 @@ class _PracticeTabState extends State<PracticeTab> {
       _hasAnsweredNormal = false;
 
       if (!_isReversedNormal) {
-        // MODO CLÁSSICO: Mostra a palavra no idioma estrangeiro e pede o significado
         _questionToDisplay = _currentWordNormal!['ingles'];
         _validAnswersNormal = _currentWordNormal!['traducoes'].toString().split('|').map((e) => e.trim().toLowerCase()).toList();
       } else {
-        // MODO INVERSO: Escolhe um significado aleatório e pede a palavra estrangeira
         final meanings = _currentWordNormal!['traducoes'].toString().split('|').map((e) => e.trim()).toList();
         _questionToDisplay = meanings[Random().nextInt(meanings.length)];
-
-        // Encontra TODAS as palavras em inglês que partilham este mesmo significado (ex: Hi e Hello para "Oi")
         _validAnswersNormal = [];
         for (var w in _allFetchedWordsNormal) {
           final wMeanings = w['traducoes'].toString().split('|').map((e) => e.trim().toLowerCase()).toList();
@@ -497,36 +572,27 @@ class _PracticeTabState extends State<PracticeTab> {
   void _verifyAnswerNormal() async {
     if (_currentWordNormal == null || _answerCtrl.text.isEmpty || _hasAnsweredNormal) return;
 
-    setState(() { _hasAnsweredNormal = true; }); // Trava Imediata
-
+    setState(() { _hasAnsweredNormal = true; });
     final userAnswer = _answerCtrl.text.trim().toLowerCase();
-
-    // Verifica se a resposta do utilizador está na lista de respostas válidas calculadas
     bool acertou = _validAnswersNormal.contains(userAnswer);
+
     setState(() {
       if (acertou) {
-        _resultTextNormal = 'Resposta Correta! 🎉'; _resultColorNormal = Colors.green;
+        _resultTextNormal = t('Resposta Correta! 🎉'); _resultColorNormal = Colors.green;
       } else {
-        // Junta todas as opções corretas para mostrar ao utilizador
-        final displayCorrect = _validAnswersNormal.join(' ou ');
-        _resultTextNormal = 'Incorreta. O correto é: $displayCorrect'; _resultColorNormal = Colors.red;
+        final displayCorrect = _validAnswersNormal.join(' ${t('ou')} ');
+        _resultTextNormal = '${t('Incorreta. O correto é:')} $displayCorrect'; _resultColorNormal = Colors.red;
       }
     });
 
     _handleAnswer(acertou);
-
-    // AVANÇO AUTOMÁTICO APÓS 2.5 SEGUNDOS
     await Future.delayed(const Duration(milliseconds: 2500));
-    if (mounted && _hasAnsweredNormal) {
-      _drawWordNormal();
-    }
+    if (mounted && _hasAnsweredNormal) { _drawWordNormal(); }
   }
 
-  // --- Funções MODO PAPAGAIO ---
   Future<void> _loadSettings() async {
     final db = DatabaseHelper.instance;
     setState(() {
-      db.getConfig('papagaio_nativo').then((v) { if (v.isNotEmpty) _parrotNativeLang = v; });
       db.getConfig('papagaio_filtro').then((v) { if (v.isNotEmpty) _parrotFilter = v; });
       db.getConfig('papagaio_custom_val').then((v) { _parrotCustomVal = v; _parrotCustomCtrl.text = v; });
       db.getConfig('papagaio_modo').then((v) { if (v.isNotEmpty) _parrotMode = v; });
@@ -538,7 +604,6 @@ class _PracticeTabState extends State<PracticeTab> {
 
   void _saveSettings() {
     final db = DatabaseHelper.instance;
-    db.updateConfig('papagaio_nativo', _parrotNativeLang);
     db.updateConfig('papagaio_filtro', _parrotFilter);
     db.updateConfig('papagaio_custom_val', _parrotCustomVal);
     db.updateConfig('papagaio_modo', _parrotMode);
@@ -575,7 +640,7 @@ class _PracticeTabState extends State<PracticeTab> {
       while (_isParrotPlaying) {
         final rawWords = await DatabaseHelper.instance.fetchCustomWords(widget.currentLang, _parrotFilter, _parrotCustomVal);
         if (rawWords.isEmpty) {
-          if (mounted) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sua biblioteca está vazia!'), backgroundColor: Colors.orange)); setState(() { _stopParrot(); _parrotCurrentWordDisplay = 'Biblioteca Vazia!'; }); }
+          if (mounted) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t('Sua biblioteca está vazia!')), backgroundColor: Colors.orange)); setState(() { _stopParrot(); _parrotCurrentWordDisplay = t('Sua biblioteca está vazia!'); }); }
           break;
         }
 
@@ -591,38 +656,36 @@ class _PracticeTabState extends State<PracticeTab> {
           if (!_isParrotPlaying) break; await Future.delayed(Duration(milliseconds: (1200 / _parrotSpeed).round()));
           if (!_isParrotPlaying) break;
 
-          String trad = word['traducoes'].toString().replaceAll('|', ' ou ');
+          String trad = word['traducoes'].toString().replaceAll('|', ' ${t('ou')} ');
           if (mounted) setState(() => _parrotCurrentWordDisplay = trad);
-          AppLanguage nativeLang = supportedLanguages[_parrotNativeLang] ?? supportedLanguages['Português']!;
+          // Usa DIRETAMENTE o idioma nativo global (Sem a barrinha individual)
+          AppLanguage nativeLang = supportedLanguages[appNativeLanguage.value] ?? supportedLanguages['Português']!;
           await _flutterTts.setLanguage(nativeLang.ttsCode); await _flutterTts.setSpeechRate(0.5 * _parrotSpeed); await _flutterTts.speak(trad);
 
           if (!_isParrotPlaying) break; await Future.delayed(Duration(milliseconds: (2000 / _parrotSpeed).round()));
         }
         if (_parrotMode == 'single' && _isParrotPlaying) {
-          if (mounted) setState(() { _stopParrot(); _parrotCurrentWordDisplay = 'Sequência Concluída!'; });
+          if (mounted) setState(() { _stopParrot(); _parrotCurrentWordDisplay = t('Sequência Concluída!'); });
           break;
         }
       }
     } catch (e) {
-      if (mounted) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro de voz: $e'), backgroundColor: Colors.red)); setState(() => _stopParrot()); }
+      if (mounted) { setState(() => _stopParrot()); }
     }
   }
 
-  // --- Funções MODO LÍNGUA AFIADA 🗡️ (Com Auto-Avanço) ---
   Future<void> _drawWordSharp() async {
     final words = await DatabaseHelper.instance.fetchCustomWords(widget.currentLang, _sharpFilter, _sharpCustomVal);
-    if (words.isEmpty) { setState(() { _sharpResultText = 'Nenhuma palavra encontrada.'; _sharpResultColor = Colors.blue; }); return; }
+    if (words.isEmpty) { setState(() { _sharpResultText = t('Nenhuma palavra encontrada.'); _sharpResultColor = Colors.blue; }); return; }
     setState(() {
       _currentWordSharp = words[Random().nextInt(words.length)];
-      _sharpResultText = '';
-      _spokenText = '';
-      _hasAnsweredSharp = false; // Destrava
+      _sharpResultText = ''; _spokenText = ''; _hasAnsweredSharp = false;
     });
     _falar(_currentWordSharp!['ingles']);
   }
 
   void _listenSharp() async {
-    if (_hasAnsweredSharp) return; // Proteção adicional
+    if (_hasAnsweredSharp) return;
 
     if (!_isListening) {
       bool available = await _speech.initialize(
@@ -642,7 +705,7 @@ class _PracticeTabState extends State<PracticeTab> {
         );
       } else {
         setState(() => _isListening = false);
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Reconhecimento indisponível no telemóvel.')));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t('Reconhecimento indisponível no telemóvel.'))));
       }
     } else {
       setState(() => _isListening = false);
@@ -654,30 +717,24 @@ class _PracticeTabState extends State<PracticeTab> {
   void _verifySpeech() async {
     if (_currentWordSharp == null || _spokenText.isEmpty || _hasAnsweredSharp) return;
 
-    setState(() { _hasAnsweredSharp = true; }); // Trava imediatamente
-
+    setState(() { _hasAnsweredSharp = true; });
     String target = _currentWordSharp!['ingles'].toString().toLowerCase().replaceAll(RegExp(r'[^\w\s]+'), '');
     String spoken = _spokenText.toLowerCase().replaceAll(RegExp(r'[^\w\s]+'), '');
 
     bool acertou = (spoken == target || spoken.contains(target) || target.contains(spoken));
     setState(() {
       if (acertou) {
-        _sharpResultText = 'Pronúncia Perfeita! 🎉'; _sharpResultColor = Colors.green;
+        _sharpResultText = t('Pronúncia Perfeita! 🎉'); _sharpResultColor = Colors.green;
       } else {
-        _sharpResultText = 'Entendemos: "$spoken"'; _sharpResultColor = Colors.red;
+        _sharpResultText = '${t('Entendemos:')} "$spoken"'; _sharpResultColor = Colors.red;
       }
     });
 
     _handleAnswer(acertou);
-
-    // AVANÇO AUTOMÁTICO APÓS 2.5 SEGUNDOS
     await Future.delayed(const Duration(milliseconds: 2500));
-    if (mounted && _hasAnsweredSharp) {
-      _drawWordSharp();
-    }
+    if (mounted && _hasAnsweredSharp) { _drawWordSharp(); }
   }
 
-  // --- Conversor de Tempo ---
   String _formatTime(int totalSeconds) {
     if (totalSeconds < 60) return "${totalSeconds}s";
     int m = totalSeconds ~/ 60;
@@ -685,6 +742,7 @@ class _PracticeTabState extends State<PracticeTab> {
     int h = m ~/ 60;
     return "${h}h ${m % 60}m";
   }
+
   @override
   Widget build(BuildContext context) {
     return Stack(
@@ -716,9 +774,8 @@ class _PracticeTabState extends State<PracticeTab> {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Text("🔥 COMBO INSANO! 🔥", style: TextStyle(fontSize: 32, color: Colors.orangeAccent, fontWeight: FontWeight.bold)),
+                            Text(t("Combos Especiais 🎉:").replaceAll(':', '!'), style: const TextStyle(fontSize: 32, color: Colors.orangeAccent, fontWeight: FontWeight.bold)),
                             Text("+$_overlayPoints", style: const TextStyle(fontSize: 100, color: Colors.greenAccent, fontWeight: FontWeight.bold, shadows: [Shadow(color: Colors.black, blurRadius: 10)])),
-                            const Text("Acertos Seguidos!", style: TextStyle(fontSize: 24, color: Colors.white)),
                           ],
                         ),
                       );
@@ -732,7 +789,6 @@ class _PracticeTabState extends State<PracticeTab> {
     );
   }
 
-// --- Nível 1: Sorteio Normal ---
   Widget _buildNormalPractice() {
     return Column(
       children: [
@@ -744,13 +800,13 @@ class _PracticeTabState extends State<PracticeTab> {
                 Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                   Row(
                     children: [
-                      const Text("Modo Clássico", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+                      Text(t("Modo Clássico"), style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
                       IconButton(
                         icon: const Icon(Icons.sync_alt, color: Colors.blue, size: 20),
-                        tooltip: "Inverter Idioma (Responder em ${widget.currentLang})",
+                        tooltip: t("Inverter Idioma"),
                         onPressed: () {
                           setState(() { _isReversedNormal = !_isReversedNormal; });
-                          _drawWordNormal(); // Sorteia nova palavra ao inverter
+                          _drawWordNormal();
                         },
                       ),
                     ],
@@ -758,14 +814,14 @@ class _PracticeTabState extends State<PracticeTab> {
                   Text("🔥 $_streak", style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 18)),
                 ]),
                 const SizedBox(height: 10),
-                FilledButton.icon(icon: const Icon(Icons.shuffle), label: const Text('Sortear Palavra'), onPressed: _drawWordNormal),
+                FilledButton.icon(icon: const Icon(Icons.shuffle), label: Text(t('Sortear Palavra')), onPressed: _drawWordNormal),
                 const SizedBox(height: 30),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Flexible(child: Text(_questionToDisplay.isEmpty ? 'Clique acima para sortear' : _questionToDisplay, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold), textAlign: TextAlign.center)),
+                    Flexible(child: Text(_questionToDisplay.isEmpty ? t('Clique acima para sortear') : _questionToDisplay, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold), textAlign: TextAlign.center)),
                     if (_currentWordNormal != null && !_isReversedNormal)
-                      IconButton(icon: const Icon(Icons.volume_up, color: Colors.blue, size: 28), tooltip: "Ouvir", onPressed: () => _falar(_currentWordNormal!['ingles'])),
+                      IconButton(icon: const Icon(Icons.volume_up, color: Colors.blue, size: 28), tooltip: t("Falar"), onPressed: () => _falar(_currentWordNormal!['ingles'])),
                   ],
                 ),
                 const SizedBox(height: 20),
@@ -773,7 +829,7 @@ class _PracticeTabState extends State<PracticeTab> {
                     controller: _answerCtrl,
                     enabled: _currentWordNormal != null && !_hasAnsweredNormal,
                     decoration: InputDecoration(
-                        labelText: _isReversedNormal ? 'Responder em ${widget.currentLang}' : 'Sua Tradução',
+                        labelText: _isReversedNormal ? "${t('Responder em')} ${t(widget.currentLang)}" : t('Sua Tradução'),
                         border: const OutlineInputBorder()
                     ),
                     onChanged: (v) => setState((){})
@@ -781,34 +837,32 @@ class _PracticeTabState extends State<PracticeTab> {
                 const SizedBox(height: 15),
                 ElevatedButton(
                     onPressed: (_currentWordNormal == null || _answerCtrl.text.isEmpty || _hasAnsweredNormal) ? null : _verifyAnswerNormal,
-                    child: const Text('Confirmar Resposta')
+                    child: Text(t('Confirmar Resposta'))
                 ),
                 const SizedBox(height: 10),
                 Text(_resultTextNormal, style: TextStyle(fontSize: 18, color: _resultColorNormal, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
                 const SizedBox(height: 10),
-
                 if (_resultTextNormal.isNotEmpty && _currentWordNormal?['imagem'] != null && _currentWordNormal!['imagem'] != '')
                   Expanded(child: Image.file(File(_currentWordNormal!['imagem']), fit: BoxFit.contain))
               ],
             ),
           ),
         ),
-        _buildMinimalArrow(Icons.keyboard_arrow_up, "Modo Papagaio", () => _pageController.animateToPage(1, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut)),
+        _buildMinimalArrow(Icons.keyboard_arrow_up, t("Modo Papagaio"), () => _pageController.animateToPage(1, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut)),
       ],
     );
   }
 
-  // --- Nível 2: Modo Papagaio ---
   Widget _buildParrotPractice() {
     return Column(
       children: [
-        _buildMinimalArrow(Icons.keyboard_arrow_down, "Modo Sorteio", () => _pageController.animateToPage(0, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut)),
+        _buildMinimalArrow(Icons.keyboard_arrow_down, t("Modo Clássico"), () => _pageController.animateToPage(0, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut)),
         Expanded(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20.0),
             child: Column(
               children: [
-                const Row(mainAxisAlignment: MainAxisAlignment.center, children: [ Text('🦜', style: TextStyle(fontSize: 30)), SizedBox(width: 10), Text('Modo Papagaio', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)) ]),
+                Row(mainAxisAlignment: MainAxisAlignment.center, children: [ const Text('🦜', style: TextStyle(fontSize: 30)), const SizedBox(width: 10), Text(t('Modo Papagaio'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)) ]),
                 const Divider(height: 15),
 
                 Expanded(
@@ -821,41 +875,38 @@ class _PracticeTabState extends State<PracticeTab> {
                                 ignoring: _isParrotPlaying,
                                 child: Column(
                                   children: [
-                                    DropdownButtonFormField<String>(decoration: const InputDecoration(labelText: 'Seu Idioma (Origem)', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 15, vertical: 12)), value: _parrotNativeLang, items: supportedLanguages.keys.map((l) => DropdownMenuItem(value: l, child: Text(l))).toList(), onChanged: (v) { setState(() => _parrotNativeLang = v!); _saveSettings(); }),
+                                    DropdownButtonFormField<String>(decoration: InputDecoration(labelText: t('Filtro de Palavras'), border: const OutlineInputBorder(), contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12)), value: _parrotFilter, items: [ DropdownMenuItem(value: 'todas', child: Text(t("Todas as palavras salvas"))), DropdownMenuItem(value: '10', child: Text(t("Últimas 10 palavras"))), DropdownMenuItem(value: '20', child: Text(t("Últimas 20 palavras"))), DropdownMenuItem(value: '30', child: Text(t("Últimas 30 palavras"))), DropdownMenuItem(value: 'custom', child: Text(t("Quantidade Personalizada..."))) ], onChanged: (v) { setState(() => _parrotFilter = v!); _saveSettings(); }),
+                                    if (_parrotFilter == 'custom') Padding(padding: const EdgeInsets.only(top: 10), child: TextField(controller: _parrotCustomCtrl, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: t('Nº Personalizado (> 0)'), border: const OutlineInputBorder(), isDense: true))),
                                     const SizedBox(height: 12),
-                                    DropdownButtonFormField<String>(decoration: const InputDecoration(labelText: 'Filtro de Palavras', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 15, vertical: 12)), value: _parrotFilter, items: const [ DropdownMenuItem(value: 'todas', child: Text("Todas as palavras salvas")), DropdownMenuItem(value: '10', child: Text("Últimas 10 palavras")), DropdownMenuItem(value: '20', child: Text("Últimas 20 palavras")), DropdownMenuItem(value: '30', child: Text("Últimas 30 palavras")), DropdownMenuItem(value: 'custom', child: Text("Quantidade Personalizada...")) ], onChanged: (v) { setState(() => _parrotFilter = v!); _saveSettings(); }),
-                                    if (_parrotFilter == 'custom') Padding(padding: const EdgeInsets.only(top: 10), child: TextField(controller: _parrotCustomCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Digite a quantidade (> 0)', border: OutlineInputBorder(), isDense: true))),
+                                    DropdownButtonFormField<double>(decoration: InputDecoration(labelText: t('Velocidade da Voz'), border: const OutlineInputBorder(), contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12)), value: _parrotSpeed, items: [ DropdownMenuItem(value: 0.5, child: Text("${t('Lento (0.5x)')}")), DropdownMenuItem(value: 1.0, child: Text("${t('Normal (1x)')}")), DropdownMenuItem(value: 1.5, child: Text("${t('Rápido (1.5x)')}")), DropdownMenuItem(value: 2.0, child: Text("${t('Turbo (2x)')}")) ], onChanged: (v) { setState(() => _parrotSpeed = v!); _saveSettings(); }),
                                     const SizedBox(height: 12),
-                                    DropdownButtonFormField<double>(decoration: const InputDecoration(labelText: 'Velocidade da Voz', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 15, vertical: 12)), value: _parrotSpeed, items: const [ DropdownMenuItem(value: 0.5, child: Text("Lento (0.5x)")), DropdownMenuItem(value: 1.0, child: Text("Normal (1x)")), DropdownMenuItem(value: 1.5, child: Text("Rápido (1.5x)")), DropdownMenuItem(value: 2.0, child: Text("Turbo (2x)")) ], onChanged: (v) { setState(() => _parrotSpeed = v!); _saveSettings(); }),
-                                    const SizedBox(height: 12),
-                                    DropdownButtonFormField<String>(decoration: const InputDecoration(labelText: 'Modo de Repetição', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 15, vertical: 12)), value: _parrotMode, items: const [ DropdownMenuItem(value: 'loop', child: Text("🔁 Em Loop (Sorteio Infinito)")), DropdownMenuItem(value: 'single', child: Text("➡️ 1 Sequência (Parar no fim)")) ], onChanged: (v) { setState(() => _parrotMode = v!); _saveSettings(); }),
+                                    DropdownButtonFormField<String>(decoration: InputDecoration(labelText: t('Modo de Repetição'), border: const OutlineInputBorder(), contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12)), value: _parrotMode, items: [ DropdownMenuItem(value: 'loop', child: Text("🔁 ${t('Em Loop (Sorteio Infinito)')}")), DropdownMenuItem(value: 'single', child: Text("➡️ ${t('1 Sequência (Parar no fim)')}")) ], onChanged: (v) { setState(() => _parrotMode = v!); _saveSettings(); }),
                                   ],
                                 )
                             )
                         ),
                         const SizedBox(height: 25),
-                        Text(_parrotCurrentWordDisplay.isEmpty ? 'Pronto para voar!' : _parrotCurrentWordDisplay, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.green), textAlign: TextAlign.center),
+                        Text(_parrotCurrentWordDisplay.isEmpty ? t('Pronto para voar!') : _parrotCurrentWordDisplay, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.green), textAlign: TextAlign.center),
                         const SizedBox(height: 20),
                       ],
                     ),
                   ),
                 ),
 
-                SizedBox(width: double.infinity, height: 55, child: FilledButton.icon(style: FilledButton.styleFrom(backgroundColor: _isParrotPlaying ? Colors.red.shade700 : Colors.green.shade700), onPressed: _toggleParrot, icon: Icon(_isParrotPlaying ? Icons.stop : Icons.play_arrow, size: 26), label: Text(_isParrotPlaying ? "Parar Papagaio" : "Iniciar Papagaio", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)))),
+                SizedBox(width: double.infinity, height: 55, child: FilledButton.icon(style: FilledButton.styleFrom(backgroundColor: _isParrotPlaying ? Colors.red.shade700 : Colors.green.shade700), onPressed: _toggleParrot, icon: Icon(_isParrotPlaying ? Icons.stop : Icons.play_arrow, size: 26), label: Text(_isParrotPlaying ? t("Parar Papagaio") : t("Iniciar Papagaio"), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)))),
               ],
             ),
           ),
         ),
-        _buildMinimalArrow(Icons.keyboard_arrow_up, "Língua Afiada", () => _pageController.animateToPage(2, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut)),
+        _buildMinimalArrow(Icons.keyboard_arrow_up, t("Língua Afiada"), () => _pageController.animateToPage(2, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut)),
       ],
     );
   }
 
-  // --- Nível 3: Modo Língua Afiada 🗡️ ---
   Widget _buildSharpPractice() {
     return Column(
       children: [
-        _buildMinimalArrow(Icons.keyboard_arrow_down, "Modo Papagaio", () => _pageController.animateToPage(1, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut)),
+        _buildMinimalArrow(Icons.keyboard_arrow_down, t("Modo Papagaio"), () => _pageController.animateToPage(1, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut)),
         Expanded(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20.0),
@@ -863,46 +914,44 @@ class _PracticeTabState extends State<PracticeTab> {
               child: Column(
                 children: [
                   Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    const Text(""),
-                    Text("🔥 $_streak", style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 18)),
+                    const Text(""), Text("🔥 $_streak", style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 18)),
                   ]),
-                  const Row(mainAxisAlignment: MainAxisAlignment.center, children: [ Text('🗡️', style: TextStyle(fontSize: 30)), SizedBox(width: 10), Text('Língua Afiada', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)) ]),
+                  Row(mainAxisAlignment: MainAxisAlignment.center, children: [ const Text('🗡️', style: TextStyle(fontSize: 30)), const SizedBox(width: 10), Text(t('Língua Afiada'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)) ]),
                   const Divider(height: 15),
 
                   DropdownButtonFormField<String>(
-                      decoration: const InputDecoration(labelText: 'Filtro de Sorteio', border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 12), isDense: true),
+                      decoration: InputDecoration(labelText: t('Filtro de Sorteio (Global)'), border: const OutlineInputBorder(), contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12), isDense: true),
                       value: _sharpFilter,
-                      items: const [ DropdownMenuItem(value: 'todas', child: Text("Todas as palavras")), DropdownMenuItem(value: '10', child: Text("Últimas 10")), DropdownMenuItem(value: '20', child: Text("Últimas 20")), DropdownMenuItem(value: '30', child: Text("Últimas 30")), DropdownMenuItem(value: 'custom', child: Text("Personalizado")) ],
+                      items: [ DropdownMenuItem(value: 'todas', child: Text(t("Todas as palavras"))), DropdownMenuItem(value: '10', child: Text(t("Últimas 10"))), DropdownMenuItem(value: '20', child: Text(t("Últimas 20"))), DropdownMenuItem(value: '30', child: Text(t("Últimas 30"))), DropdownMenuItem(value: 'custom', child: Text(t("Personalizado"))) ],
                       onChanged: (v) { setState(() => _sharpFilter = v!); _saveSettings(); }
                   ),
                   if (_sharpFilter == 'custom')
                     Padding(
                       padding: const EdgeInsets.only(top: 10),
-                      child: TextField(controller: _sharpCustomCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Quantidade Personalizada (>0)', border: OutlineInputBorder(), isDense: true)),
+                      child: TextField(controller: _sharpCustomCtrl, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: t('Nº Personalizado (> 0)'), border: const OutlineInputBorder(), isDense: true)),
                     ),
                   const SizedBox(height: 20),
 
-                  FilledButton.icon(icon: const Icon(Icons.shuffle), label: const Text('Sortear Nova Palavra'), onPressed: _drawWordSharp),
+                  FilledButton.icon(icon: const Icon(Icons.shuffle), label: Text(t('Sortear Nova Palavra')), onPressed: _drawWordSharp),
                   const SizedBox(height: 30),
 
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Flexible(child: Text(_currentWordSharp?['ingles'] ?? 'Sorteie para começar', style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold), textAlign: TextAlign.center)),
-                      if (_currentWordSharp != null) IconButton(icon: const Icon(Icons.volume_up, color: Colors.blue, size: 35), tooltip: "Ouvir Novamente", onPressed: () => _falar(_currentWordSharp!['ingles'])),
+                      Flexible(child: Text(_currentWordSharp?['ingles'] ?? t('Sorteie para começar'), style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold), textAlign: TextAlign.center)),
+                      if (_currentWordSharp != null) IconButton(icon: const Icon(Icons.volume_up, color: Colors.blue, size: 35), tooltip: t("Falar"), onPressed: () => _falar(_currentWordSharp!['ingles'])),
                     ],
                   ),
 
                   if (_currentWordSharp != null) ...[
                     const SizedBox(height: 10),
-                    Text(_currentWordSharp!['traducoes'].toString().replaceAll('|', ' ou '), style: const TextStyle(fontSize: 16, color: Colors.grey)),
+                    Text(_currentWordSharp!['traducoes'].toString().replaceAll('|', ' ${t('ou')} '), style: const TextStyle(fontSize: 16, color: Colors.grey)),
                   ],
 
                   const SizedBox(height: 30),
                   Text(_sharpResultText, style: TextStyle(fontSize: 18, color: _sharpResultColor, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
                   const SizedBox(height: 20),
 
-                  // O Microfone fica cinza claro e não clicável se a resposta já foi submetida!
                   GestureDetector(
                     onTap: (_currentWordSharp == null || _hasAnsweredSharp) ? null : _listenSharp,
                     child: CircleAvatar(
@@ -912,33 +961,28 @@ class _PracticeTabState extends State<PracticeTab> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  Text(_isListening ? "A escutar... Fale agora!" : (_currentWordSharp == null ? "" : "Toque para falar"), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  Text(_isListening ? t("A escutar... Fale agora!") : (_currentWordSharp == null ? "" : t("Toque para falar")), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                   const SizedBox(height: 20),
                 ],
               ),
             ),
           ),
         ),
-        _buildMinimalArrow(Icons.keyboard_arrow_up, "Desempenho", () => _pageController.animateToPage(3, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut)),
+        _buildMinimalArrow(Icons.keyboard_arrow_up, t("Desempenho"), () => _pageController.animateToPage(3, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut)),
       ],
     );
   }
 
-  // --- Nível 4: Desempenho (Estatísticas) 📈 ---
   Widget _buildDesempenhoPractice() {
     return Column(
       children: [
-        _buildMinimalArrow(Icons.keyboard_arrow_down, "Língua Afiada", () => _pageController.animateToPage(2, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut)),
+        _buildMinimalArrow(Icons.keyboard_arrow_down, t("Língua Afiada"), () => _pageController.animateToPage(2, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut)),
         Expanded(
           child: FutureBuilder(
-            future: Future.wait([
-              DatabaseHelper.instance.getEstatisticasHoje(),
-              DatabaseHelper.instance.getEstatisticasSemana(),
-              DatabaseHelper.instance.getHistoricoMensal()
-            ]),
+            future: Future.wait([ DatabaseHelper.instance.getEstatisticasHoje(), DatabaseHelper.instance.getEstatisticasSemana(), DatabaseHelper.instance.getHistoricoMensal() ]),
             builder: (context, AsyncSnapshot<List<dynamic>> snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-              if (snapshot.hasError || !snapshot.hasData || snapshot.data == null) return const Center(child: Text("Nenhuma atividade.", style: TextStyle(color: Colors.grey)));
+              if (snapshot.hasError || !snapshot.hasData || snapshot.data == null) return Center(child: Text(t("Nenhuma atividade."), style: const TextStyle(color: Colors.grey)));
 
               final hoje = snapshot.data![0] as Map<String, dynamic>? ?? {};
               final semana = snapshot.data![1] as Map<String, dynamic>? ?? {};
@@ -948,7 +992,7 @@ class _PracticeTabState extends State<PracticeTab> {
                 padding: const EdgeInsets.symmetric(horizontal: 20.0),
                 child: Column(
                   children: [
-                    const Row(mainAxisAlignment: MainAxisAlignment.center, children: [ Text('📈', style: TextStyle(fontSize: 30)), SizedBox(width: 10), Text('Seu Desempenho', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)) ]),
+                    Row(mainAxisAlignment: MainAxisAlignment.center, children: [ const Text('📈', style: TextStyle(fontSize: 30)), const SizedBox(width: 10), Text(t('Seu Desempenho'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)) ]),
                     const Divider(height: 15),
 
                     Card(
@@ -958,12 +1002,12 @@ class _PracticeTabState extends State<PracticeTab> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text("Desempenho de Hoje", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blue)),
+                            Text(t("Desempenho de Hoje"), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blue)),
                             const SizedBox(height: 10),
-                            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("Perguntas Respondidas:"), Text("${hoje['respondidas'] ?? 0}", style: const TextStyle(fontWeight: FontWeight.bold))]),
-                            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("Acertos / Erros:"), Text("${hoje['acertos'] ?? 0} / ${hoje['erros'] ?? 0}", style: const TextStyle(fontWeight: FontWeight.bold))]),
-                            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("Combos Especiais 🎉:"), Text("${hoje['especiais'] ?? 0}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green))]),
-                            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("Tempo no Papagaio 🦜:"), Text(_formatTime(hoje['tempo_papagaio'] ?? 0), style: const TextStyle(fontWeight: FontWeight.bold))]),
+                            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(t("Perguntas Respondidas:")), Text("${hoje['respondidas'] ?? 0}", style: const TextStyle(fontWeight: FontWeight.bold))]),
+                            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(t("Acertos / Erros:")), Text("${hoje['acertos'] ?? 0} / ${hoje['erros'] ?? 0}", style: const TextStyle(fontWeight: FontWeight.bold))]),
+                            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(t("Combos Especiais 🎉:")), Text("${hoje['especiais'] ?? 0}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green))]),
+                            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(t("Tempo no Papagaio 🦜:")), Text(_formatTime(hoje['tempo_papagaio'] ?? 0), style: const TextStyle(fontWeight: FontWeight.bold))]),
                           ],
                         ),
                       ),
@@ -977,22 +1021,22 @@ class _PracticeTabState extends State<PracticeTab> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text("Últimos 7 Dias", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.purple)),
+                            Text(t("Últimos 7 Dias"), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.purple)),
                             const SizedBox(height: 10),
-                            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("Perguntas Respondidas:"), Text("${semana['respondidas'] ?? 0}", style: const TextStyle(fontWeight: FontWeight.bold))]),
-                            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("Acertos / Erros:"), Text("${semana['acertos'] ?? 0} / ${semana['erros'] ?? 0}", style: const TextStyle(fontWeight: FontWeight.bold))]),
-                            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("Combos Especiais 🎉:"), Text("${semana['especiais'] ?? 0}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green))]),
-                            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("Tempo no Papagaio 🦜:"), Text(_formatTime(semana['tempo_papagaio'] ?? 0), style: const TextStyle(fontWeight: FontWeight.bold))]),
+                            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(t("Perguntas Respondidas:")), Text("${semana['respondidas'] ?? 0}", style: const TextStyle(fontWeight: FontWeight.bold))]),
+                            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(t("Acertos / Erros:")), Text("${semana['acertos'] ?? 0} / ${semana['erros'] ?? 0}", style: const TextStyle(fontWeight: FontWeight.bold))]),
+                            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(t("Combos Especiais 🎉:")), Text("${semana['especiais'] ?? 0}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green))]),
+                            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(t("Tempo no Papagaio 🦜:")), Text(_formatTime(semana['tempo_papagaio'] ?? 0), style: const TextStyle(fontWeight: FontWeight.bold))]),
                           ],
                         ),
                       ),
                     ),
                     const SizedBox(height: 15),
 
-                    const Align(alignment: Alignment.centerLeft, child: Text(" Histórico Mensal", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+                    Align(alignment: Alignment.centerLeft, child: Text(" ${t('Histórico Mensal')}", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
                     const SizedBox(height: 10),
                     meses.isEmpty
-                        ? const Text("Nenhum dado mensal.", style: TextStyle(color: Colors.grey))
+                        ? Text(t("Nenhum dado mensal."), style: const TextStyle(color: Colors.grey))
                         : ListView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
@@ -1003,7 +1047,7 @@ class _PracticeTabState extends State<PracticeTab> {
                           child: ListTile(
                             leading: const Icon(Icons.calendar_month, color: Colors.grey),
                             title: Text(mes['mes'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
-                            subtitle: Text("Respondidas: ${mes['respondidas'] ?? 0} | Acertos: ${mes['acertos'] ?? 0}\nEspeciais: ${mes['especiais'] ?? 0} | Papagaio: ${_formatTime(mes['tempo_papagaio'] ?? 0)}"),
+                            subtitle: Text("${t('Perguntas Respondidas:')} ${mes['respondidas'] ?? 0} | ${t('Acertos / Erros:')} ${mes['acertos'] ?? 0}\n${t('Combos Especiais 🎉:')} ${mes['especiais'] ?? 0} | ${t('Tempo no Papagaio 🦜:')} ${_formatTime(mes['tempo_papagaio'] ?? 0)}"),
                           ),
                         );
                       },
@@ -1035,6 +1079,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
   bool _isFeedbackEnabled = true;
   String _filtro = 'todas';
   String _idiomaSelecionado = 'Inglês';
+  String _idiomaNativoSelecionado = 'Português';
   final _customCtrl = TextEditingController();
 
   @override
@@ -1049,6 +1094,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
     final filtro = await db.getConfig('filtro');
     final customVal = await db.getConfig('custom_val');
     final idioma = await db.getConfig('idioma_atual');
+    final idiomaNativo = await db.getConfig('idioma_nativo');
     final feedback = await db.getConfig('feedback_ativo');
 
     setState(() {
@@ -1056,6 +1102,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
       _filtro = filtro.isEmpty ? 'todas' : filtro;
       _customCtrl.text = customVal;
       _idiomaSelecionado = idioma.isEmpty ? 'Inglês' : idioma;
+      _idiomaNativoSelecionado = idiomaNativo.isEmpty ? 'Português' : idiomaNativo;
       _isFeedbackEnabled = (feedback.isEmpty || feedback == 'true');
     });
   }
@@ -1064,7 +1111,6 @@ class _SettingsSheetState extends State<SettingsSheet> {
     if (_filtro == 'custom') {
       int? val = int.tryParse(_customCtrl.text.trim());
       if (val == null || val <= 0) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Insira um número válido > 0')));
         return;
       }
     }
@@ -1075,18 +1121,19 @@ class _SettingsSheetState extends State<SettingsSheet> {
       await db.updateConfig('filtro', _filtro);
       await db.updateConfig('custom_val', _customCtrl.text.trim());
       await db.updateConfig('idioma_atual', _idiomaSelecionado);
+      await db.updateConfig('idioma_nativo', _idiomaNativoSelecionado);
       await db.updateConfig('feedback_ativo', _isFeedbackEnabled ? 'true' : 'false');
 
       appThemeMode.value = _isDark ? ThemeMode.dark : ThemeMode.light;
       appLanguage.value = _idiomaSelecionado;
+      appNativeLanguage.value = _idiomaNativoSelecionado;
       appFeedbackEnabled.value = _isFeedbackEnabled;
 
       if (!mounted) return;
       Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Configurações salvas!')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t('Configurações salvas!'))));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro: $e')));
     }
   }
 
@@ -1100,36 +1147,49 @@ class _SettingsSheetState extends State<SettingsSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("Idioma de Estudo Principal", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              Text(t("Idioma de Estudo Principal"), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
                 value: _idiomaSelecionado,
                 decoration: const InputDecoration(border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 10)),
                 items: supportedLanguages.keys.map((lang) {
-                  return DropdownMenuItem(value: lang, child: Text("${supportedLanguages[lang]!.flag} Aprender $lang"));
+                  return DropdownMenuItem(value: lang, child: Text("${supportedLanguages[lang]!.flag} ${t('Aprender')} ${t(lang)}"));
                 }).toList(),
                 onChanged: (val) { if (val != null) setState(() => _idiomaSelecionado = val); },
               ),
-              const Divider(height: 30),
+              const SizedBox(height: 20),
 
-              const Text("Preferências", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              SwitchListTile(title: const Text("Modo Noturno"), value: _isDark, onChanged: (val) => setState(() => _isDark = val)),
-              SwitchListTile(title: const Text("Som e Vibração (Feedback)"), value: _isFeedbackEnabled, onChanged: (val) => setState(() => _isFeedbackEnabled = val)),
+              // --- NOVA ABA DE IDIOMA NATIVO ---
+              Text(t("Seu Idioma (Origem)"), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                value: _idiomaNativoSelecionado,
+                decoration: const InputDecoration(border: OutlineInputBorder(), contentPadding: EdgeInsets.symmetric(horizontal: 10)),
+                items: supportedLanguages.keys.map((lang) {
+                  return DropdownMenuItem(value: lang, child: Text("${supportedLanguages[lang]!.flag} ${t('Falar')} ${t(lang)}"));
+                }).toList(),
+                onChanged: (val) { if (val != null) setState(() => _idiomaNativoSelecionado = val); },
+              ),
 
               const Divider(height: 30),
-              const Text("Filtro de Sorteio (Global)", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              RadioListTile(title: const Text("Todas as palavras"), value: 'todas', groupValue: _filtro, onChanged: (v) => setState(() => _filtro = v.toString())),
-              RadioListTile(title: const Text("Últimas 10"), value: '10', groupValue: _filtro, onChanged: (v) => setState(() => _filtro = v.toString())),
-              RadioListTile(title: const Text("Últimas 20"), value: '20', groupValue: _filtro, onChanged: (v) => setState(() => _filtro = v.toString())),
-              RadioListTile(title: const Text("Últimas 30"), value: '30', groupValue: _filtro, onChanged: (v) => setState(() => _filtro = v.toString())),
-              RadioListTile(title: const Text("Personalizado"), value: 'custom', groupValue: _filtro, onChanged: (v) => setState(() => _filtro = v.toString())),
+              Text(t("Preferências"), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              SwitchListTile(title: Text(t("Modo Noturno")), value: _isDark, onChanged: (val) => setState(() => _isDark = val)),
+              SwitchListTile(title: Text(t("Som e Vibração")), value: _isFeedbackEnabled, onChanged: (val) => setState(() => _isFeedbackEnabled = val)),
+
+              const Divider(height: 30),
+              Text(t("Filtro de Sorteio (Global)"), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              RadioListTile(title: Text(t("Todas as palavras")), value: 'todas', groupValue: _filtro, onChanged: (v) => setState(() => _filtro = v.toString())),
+              RadioListTile(title: Text(t("Últimas 10")), value: '10', groupValue: _filtro, onChanged: (v) => setState(() => _filtro = v.toString())),
+              RadioListTile(title: Text(t("Últimas 20")), value: '20', groupValue: _filtro, onChanged: (v) => setState(() => _filtro = v.toString())),
+              RadioListTile(title: Text(t("Últimas 30")), value: '30', groupValue: _filtro, onChanged: (v) => setState(() => _filtro = v.toString())),
+              RadioListTile(title: Text(t("Personalizado")), value: 'custom', groupValue: _filtro, onChanged: (v) => setState(() => _filtro = v.toString())),
               if (_filtro == 'custom')
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
-                  child: TextField(controller: _customCtrl, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "Nº Personalizado (> 0)", border: OutlineInputBorder())),
+                  child: TextField(controller: _customCtrl, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: t("Nº Personalizado (> 0)"), border: const OutlineInputBorder())),
                 ),
               const Divider(),
-              Align(alignment: Alignment.centerRight, child: FilledButton(onPressed: _salvar, child: const Text("Salvar"))),
+              Align(alignment: Alignment.centerRight, child: FilledButton(onPressed: _salvar, child: Text(t("Salvar")))),
               const SizedBox(height: 10),
             ],
           ),
@@ -1171,11 +1231,12 @@ class _RegisterTabState extends State<RegisterTab> {
     try {
       AppLanguage langData = supportedLanguages[widget.currentLang]!;
       final translator = tr.GoogleTranslator();
-      final translation = await translator.translate(_inglesCtrl.text.trim(), from: langData.transCode, to: 'pt');
+      // O Tradutor agora envia os dados para a sua LÍNGUA DE ORIGEM Global
+      String targetLangCode = supportedLanguages[appNativeLanguage.value]!.transCode;
+      final translation = await translator.translate(_inglesCtrl.text.trim(), from: langData.transCode, to: targetLangCode);
       setState(() => _traducaoCtrl.text = translation.text);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erro de conexão ao traduzir.')));
     }
     setState(() => _isTranslating = false);
   }
@@ -1191,7 +1252,7 @@ class _RegisterTabState extends State<RegisterTab> {
 
   Future<void> _saveWord() async {
     if (_inglesCtrl.text.trim().isEmpty || _traducaoCtrl.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Preencha a palavra e a tradução antes de salvar.')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t('Preencha a palavra e a tradução antes de salvar.'))));
       return;
     }
     try {
@@ -1202,11 +1263,11 @@ class _RegisterTabState extends State<RegisterTab> {
         bool? addAnother = await showDialog<bool>(
             context: context,
             builder: (c) => AlertDialog(
-                title: const Text("Palavra Existente"),
-                content: const Text("Esta palavra já existe na biblioteca desta língua. Deseja adicionar este novo significado a ela?"),
+                title: Text(t("Palavra Existente")),
+                content: Text(t("Esta palavra já existe na biblioteca desta língua. Deseja adicionar este novo significado a ela?")),
                 actions: [
-                  TextButton(onPressed: () => Navigator.pop(c, false), child: const Text("Cancelar")),
-                  FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text("Sim"))
+                  TextButton(onPressed: () => Navigator.pop(c, false), child: Text(t("Cancelar"))),
+                  FilledButton(onPressed: () => Navigator.pop(c, true), child: Text(t("Sim")))
                 ]
             )
         );
@@ -1214,11 +1275,10 @@ class _RegisterTabState extends State<RegisterTab> {
       }
       await db.insertWord({'ingles': _inglesCtrl.text.trim(), 'traducao': _traducaoCtrl.text.trim(), 'imagem': _imageFile?.path ?? '', 'lingua': widget.currentLang});
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Palavra salva com sucesso!'), backgroundColor: Colors.green));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t('Palavra salva com sucesso!')), backgroundColor: Colors.green));
       setState(() { _inglesCtrl.clear(); _traducaoCtrl.clear(); _imageFile = null; });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro interno ao salvar: $e'), backgroundColor: Colors.red));
     }
   }
 
@@ -1228,32 +1288,32 @@ class _RegisterTabState extends State<RegisterTab> {
       padding: const EdgeInsets.all(20.0),
       child: Column(
         children: [
-          const Text("Registar Palavra", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          Text(t("Registar Palavra"), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
           const SizedBox(height: 15),
           Row(
             children: [
-              Expanded(child: TextField(controller: _inglesCtrl, decoration: InputDecoration(labelText: 'Palavra em ${widget.currentLang}', border: const OutlineInputBorder()))),
-              IconButton(icon: const Icon(Icons.volume_up, color: Colors.blue), tooltip: "Ouvir Pronúncia", onPressed: () => _falar(_inglesCtrl.text.trim())),
-              IconButton(icon: _isTranslating ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.g_translate, color: Colors.blue), tooltip: "Traduzir", onPressed: _translateWord),
+              Expanded(child: TextField(controller: _inglesCtrl, decoration: InputDecoration(labelText: "${t('Palavra em')} ${t(widget.currentLang)}", border: const OutlineInputBorder()))),
+              IconButton(icon: const Icon(Icons.volume_up, color: Colors.blue), tooltip: t("Falar"), onPressed: () => _falar(_inglesCtrl.text.trim())),
+              IconButton(icon: _isTranslating ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.g_translate, color: Colors.blue), onPressed: _translateWord),
             ],
           ),
           const SizedBox(height: 15),
-          TextField(controller: _traducaoCtrl, decoration: const InputDecoration(labelText: 'Significado / Tradução', border: OutlineInputBorder())),
+          TextField(controller: _traducaoCtrl, decoration: InputDecoration(labelText: t('Significado / Tradução'), border: const OutlineInputBorder())),
           const SizedBox(height: 20),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              ElevatedButton.icon(icon: const Icon(Icons.camera_alt), label: const Text('Câmera'), onPressed: () => _pickImage(ImageSource.camera)),
-              ElevatedButton.icon(icon: const Icon(Icons.photo_library), label: const Text('Galeria'), onPressed: () => _pickImage(ImageSource.gallery)),
+              ElevatedButton.icon(icon: const Icon(Icons.camera_alt), label: Text(t('Câmera')), onPressed: () => _pickImage(ImageSource.camera)),
+              ElevatedButton.icon(icon: const Icon(Icons.photo_library), label: Text(t('Galeria')), onPressed: () => _pickImage(ImageSource.gallery)),
             ],
           ),
           const SizedBox(height: 20),
           if (_imageFile != null) ...[
             Image.file(_imageFile!, height: 150, fit: BoxFit.cover),
-            TextButton.icon(icon: const Icon(Icons.delete, color: Colors.red), label: const Text('Remover Foto', style: TextStyle(color: Colors.red)), onPressed: () => setState(() => _imageFile = null))
+            TextButton.icon(icon: const Icon(Icons.delete, color: Colors.red), label: Text(t('Remover Foto'), style: const TextStyle(color: Colors.red)), onPressed: () => setState(() => _imageFile = null))
           ],
           const SizedBox(height: 20),
-          SizedBox(width: double.infinity, height: 50, child: FilledButton(onPressed: _saveWord, child: const Text('Confirmar', style: TextStyle(fontSize: 18))))
+          SizedBox(width: double.infinity, height: 50, child: FilledButton(onPressed: _saveWord, child: Text(t('Confirmar'), style: const TextStyle(fontSize: 18))))
         ],
       ),
     );
@@ -1274,7 +1334,7 @@ class LibraryTab extends StatefulWidget {
 class _LibraryTabState extends State<LibraryTab> {
   List<Map<String, dynamic>> _distinctWords = [];
   final _searchCtrl = TextEditingController();
-  int _totalWordsCount = 0; // Nova variável para o contador total
+  int _totalWordsCount = 0;
 
   @override
   void initState() {
@@ -1284,7 +1344,6 @@ class _LibraryTabState extends State<LibraryTab> {
 
   Future<void> _loadWords([String query = '']) async {
     final words = await DatabaseHelper.instance.fetchDistinctWords(widget.currentLang, query);
-    // Busca sempre o total limpo para manter o contador atualizado independente da pesquisa
     final totalWords = await DatabaseHelper.instance.fetchDistinctWords(widget.currentLang, '');
     setState(() {
       _distinctWords = words;
@@ -1308,22 +1367,21 @@ class _LibraryTabState extends State<LibraryTab> {
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
-              Text("Sua Biblioteca em ${widget.currentLang}", style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              Text("${t('Sua Biblioteca em')} ${t(widget.currentLang)}", style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
               const SizedBox(width: 8),
-              // Contador discreto em cinza menor
-              Text("($_totalWordsCount registradas)", style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              Text("($_totalWordsCount ${t('registradas')})", style: const TextStyle(fontSize: 12, color: Colors.grey)),
             ],
           ),
           const SizedBox(height: 10),
           TextField(
               controller: _searchCtrl,
-              decoration: const InputDecoration(labelText: 'Pesquisar...', prefixIcon: Icon(Icons.search), border: const OutlineInputBorder()),
+              decoration: InputDecoration(labelText: t('Pesquisar...'), prefixIcon: const Icon(Icons.search), border: const OutlineInputBorder()),
               onChanged: (value) => _loadWords(value)
           ),
           const SizedBox(height: 10),
           Expanded(
             child: _distinctWords.isEmpty
-                ? const Center(child: Text("Nenhuma palavra encontrada.", style: TextStyle(color: Colors.grey)))
+                ? Center(child: Text(t("Nenhuma palavra encontrada."), style: const TextStyle(color: Colors.grey)))
                 : ListView.builder(
               itemCount: _distinctWords.length,
               itemBuilder: (context, index) {
@@ -1351,6 +1409,7 @@ class _LibraryTabState extends State<LibraryTab> {
     );
   }
 }
+
 class WordDetailsScreen extends StatefulWidget {
   final String ingles;
   final String currentLang;
@@ -1390,7 +1449,7 @@ class _WordDetailsScreenState extends State<WordDetailsScreen> {
     return Scaffold(
       appBar: AppBar(
           title: Text(widget.ingles),
-          actions: [IconButton(icon: const Icon(Icons.edit), tooltip: "Editar", onPressed: _irParaEdicao)]
+          actions: [IconButton(icon: const Icon(Icons.edit), tooltip: t("Editar Palavra"), onPressed: _irParaEdicao)]
       ),
       body: ListView.separated(
         padding: const EdgeInsets.all(20),
@@ -1402,7 +1461,7 @@ class _WordDetailsScreenState extends State<WordDetailsScreen> {
 
           return Column(
             children: [
-              Text("Significado ${index + 1}: ${sig['traducao']}", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: index > 0 ? Colors.blue : null)),
+              Text("${t('Significado')} ${index + 1}: ${sig['traducao']}", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: index > 0 ? Colors.blue : null)),
               const SizedBox(height: 10),
               if (hasImg)
                 ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.file(File(sig['imagem']), height: 180, fit: BoxFit.contain))
@@ -1440,9 +1499,7 @@ class _EditWordScreenState extends State<EditWordScreen> {
   }
 
   void _addSignificado() {
-    setState(() {
-      _editMeanings.add({ 'id': null, 'traducao': TextEditingController(), 'imagem': '' });
-    });
+    setState(() { _editMeanings.add({ 'id': null, 'traducao': TextEditingController(), 'imagem': '' }); });
   }
 
   Future<void> _alterarFoto(int index, ImageSource source) async {
@@ -1455,10 +1512,7 @@ class _EditWordScreenState extends State<EditWordScreen> {
   }
 
   void _removerSignificado(int index) {
-    if (_editMeanings.length <= 1) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Uma palavra precisa ter pelo menos um significado.')));
-      return;
-    }
+    if (_editMeanings.length <= 1) return;
     setState(() => _editMeanings.removeAt(index));
   }
 
@@ -1466,11 +1520,11 @@ class _EditWordScreenState extends State<EditWordScreen> {
     bool? conf = await showDialog<bool>(
         context: context,
         builder: (c) => AlertDialog(
-            title: const Text("Excluir Palavra?"),
-            content: const Text("Deseja apagar esta palavra e TODOS os seus significados nesta língua?"),
+            title: Text(t("Excluir Palavra?")),
+            content: Text(t("Deseja apagar esta palavra e TODOS os seus significados nesta língua?")),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(c, false), child: const Text("Cancelar")),
-              FilledButton(style: FilledButton.styleFrom(backgroundColor: Colors.red), onPressed: () => Navigator.pop(c, true), child: const Text("Excluir"))
+              TextButton(onPressed: () => Navigator.pop(c, false), child: Text(t("Cancelar"))),
+              FilledButton(style: FilledButton.styleFrom(backgroundColor: Colors.red), onPressed: () => Navigator.pop(c, true), child: Text(t("Excluir")))
             ]
         )
     );
@@ -1497,18 +1551,17 @@ class _EditWordScreenState extends State<EditWordScreen> {
       }
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Alterações salvas!')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t('Alterações salvas!'))));
       Navigator.pop(context);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao salvar: $e'), backgroundColor: Colors.red));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Editar Palavra")),
+      appBar: AppBar(title: Text(t("Editar Palavra"))),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(15.0),
@@ -1516,11 +1569,11 @@ class _EditWordScreenState extends State<EditWordScreen> {
             children: [
               TextField(
                   controller: _inglesCtrl,
-                  decoration: InputDecoration(labelText: "Palavra Principal (${widget.currentLang})", border: const OutlineInputBorder()),
+                  decoration: InputDecoration(labelText: "${t('Palavra Principal')} (${t(widget.currentLang)})", border: const OutlineInputBorder()),
                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
               ),
               const SizedBox(height: 15),
-              const Text("Significados Registados:", style: TextStyle(fontWeight: FontWeight.bold)),
+              Text(t("Significados Registados:"), style: const TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 10),
               Expanded(
                 child: ListView.builder(
@@ -1537,7 +1590,7 @@ class _EditWordScreenState extends State<EditWordScreen> {
                           children: [
                             Row(
                                 children: [
-                                  Expanded(child: TextField(controller: m['traducao'], decoration: InputDecoration(labelText: "Significado ${index + 1}"))),
+                                  Expanded(child: TextField(controller: m['traducao'], decoration: InputDecoration(labelText: "${t('Significado')} ${index + 1}"))),
                                   IconButton(icon: const Icon(Icons.delete_outline, color: Colors.red), onPressed: () => _removerSignificado(index))
                                 ]
                             ),
@@ -1548,17 +1601,17 @@ class _EditWordScreenState extends State<EditWordScreen> {
                                   Container(margin: const EdgeInsets.only(right: 10), child: Image.file(File(m['imagem']), width: 40, height: 40, fit: BoxFit.cover)),
                                 TextButton.icon(
                                   icon: const Icon(Icons.image),
-                                  label: Text(hasImg ? "Alterar Foto" : "Adicionar Foto"),
+                                  label: Text(hasImg ? t("Alterar Foto") : t("Adicionar Foto")),
                                   onPressed: () {
                                     showModalBottomSheet(
                                         context: context,
                                         builder: (_) => SafeArea(
                                             child: Wrap(
                                                 children: [
-                                                  ListTile(leading: const Icon(Icons.camera_alt), title: const Text('Câmera'), onTap: () { Navigator.pop(context); _alterarFoto(index, ImageSource.camera); }),
-                                                  ListTile(leading: const Icon(Icons.photo_library), title: const Text('Galeria'), onTap: () { Navigator.pop(context); _alterarFoto(index, ImageSource.gallery); }),
+                                                  ListTile(leading: const Icon(Icons.camera_alt), title: Text(t('Câmera')), onTap: () { Navigator.pop(context); _alterarFoto(index, ImageSource.camera); }),
+                                                  ListTile(leading: const Icon(Icons.photo_library), title: Text(t('Galeria')), onTap: () { Navigator.pop(context); _alterarFoto(index, ImageSource.gallery); }),
                                                   if (hasImg)
-                                                    ListTile(leading: const Icon(Icons.delete, color: Colors.red), title: const Text('Remover Imagem', style: TextStyle(color: Colors.red)), onTap: () { Navigator.pop(context); setState(() => m['imagem'] = ''); })
+                                                    ListTile(leading: const Icon(Icons.delete, color: Colors.red), title: Text(t('Remover Imagem'), style: const TextStyle(color: Colors.red)), onTap: () { Navigator.pop(context); setState(() => m['imagem'] = ''); })
                                                 ]
                                             )
                                         )
@@ -1577,12 +1630,12 @@ class _EditWordScreenState extends State<EditWordScreen> {
               Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    OutlinedButton.icon(onPressed: _addSignificado, icon: const Icon(Icons.add), label: const Text("Significado")),
-                    TextButton.icon(onPressed: _excluirPalavraToda, icon: const Icon(Icons.delete_forever, color: Colors.red), label: const Text("Excluir Palavra", style: TextStyle(color: Colors.red)))
+                    OutlinedButton.icon(onPressed: _addSignificado, icon: const Icon(Icons.add), label: Text(t("Significado"))),
+                    TextButton.icon(onPressed: _excluirPalavraToda, icon: const Icon(Icons.delete_forever, color: Colors.red), label: Text(t("Excluir Palavra"), style: const TextStyle(color: Colors.red)))
                   ]
               ),
               const Divider(),
-              SizedBox(width: double.infinity, height: 45, child: FilledButton.icon(onPressed: _salvarAlteracoes, icon: const Icon(Icons.save), label: const Text("Salvar Alterações")))
+              SizedBox(width: double.infinity, height: 45, child: FilledButton.icon(onPressed: _salvarAlteracoes, icon: const Icon(Icons.save), label: Text(t("Salvar Alterações"))))
             ],
           ),
         ),
