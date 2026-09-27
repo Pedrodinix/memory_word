@@ -318,6 +318,12 @@ class _PracticeTabState extends State<PracticeTab> {
   Color _resultColorNormal = Colors.black;
   bool _hasAnsweredNormal = false; // TRAVA DE RESPOSTA NORMAL
 
+  // --- NOVAS VARIÁVEIS PARA O MODO INVERSO ---
+  bool _isReversedNormal = false;
+  List<Map<String, dynamic>> _allFetchedWordsNormal = [];
+  String _questionToDisplay = '';
+  List<String> _validAnswersNormal = [];
+
   // Variáveis do Modo Papagaio
   String _parrotNativeLang = 'Português';
   String _parrotFilter = 'todas';
@@ -455,15 +461,36 @@ class _PracticeTabState extends State<PracticeTab> {
     );
   }
 
-  // --- Funções MODO NORMAL (Com Auto-Avanço) ---
+  // --- Funções MODO NORMAL (Com Auto-Avanço e Modo Inverso) ---
   Future<void> _drawWordNormal() async {
     final words = await DatabaseHelper.instance.fetchCustomWords(widget.currentLang, 'todas', '');
     if (words.isEmpty) { setState(() { _resultTextNormal = 'Sua biblioteca está vazia.'; _resultColorNormal = Colors.blue; }); return; }
+
     setState(() {
+      _allFetchedWordsNormal = words;
       _currentWordNormal = words[Random().nextInt(words.length)];
       _answerCtrl.clear();
       _resultTextNormal = '';
-      _hasAnsweredNormal = false; // Destrava para nova resposta
+      _hasAnsweredNormal = false;
+
+      if (!_isReversedNormal) {
+        // MODO CLÁSSICO: Mostra a palavra no idioma estrangeiro e pede o significado
+        _questionToDisplay = _currentWordNormal!['ingles'];
+        _validAnswersNormal = _currentWordNormal!['traducoes'].toString().split('|').map((e) => e.trim().toLowerCase()).toList();
+      } else {
+        // MODO INVERSO: Escolhe um significado aleatório e pede a palavra estrangeira
+        final meanings = _currentWordNormal!['traducoes'].toString().split('|').map((e) => e.trim()).toList();
+        _questionToDisplay = meanings[Random().nextInt(meanings.length)];
+
+        // Encontra TODAS as palavras em inglês que partilham este mesmo significado (ex: Hi e Hello para "Oi")
+        _validAnswersNormal = [];
+        for (var w in _allFetchedWordsNormal) {
+          final wMeanings = w['traducoes'].toString().split('|').map((e) => e.trim().toLowerCase()).toList();
+          if (wMeanings.contains(_questionToDisplay.toLowerCase())) {
+            _validAnswersNormal.add(w['ingles'].toString().toLowerCase());
+          }
+        }
+      }
     });
   }
 
@@ -473,14 +500,15 @@ class _PracticeTabState extends State<PracticeTab> {
     setState(() { _hasAnsweredNormal = true; }); // Trava Imediata
 
     final userAnswer = _answerCtrl.text.trim().toLowerCase();
-    final List<String> correctAnswers = _currentWordNormal!['traducoes'].toString().split('|').map((e) => e.trim().toLowerCase()).toList();
 
-    bool acertou = correctAnswers.contains(userAnswer);
+    // Verifica se a resposta do utilizador está na lista de respostas válidas calculadas
+    bool acertou = _validAnswersNormal.contains(userAnswer);
     setState(() {
       if (acertou) {
         _resultTextNormal = 'Resposta Correta! 🎉'; _resultColorNormal = Colors.green;
       } else {
-        final displayCorrect = _currentWordNormal!['traducoes'].toString().replaceAll('|', ' ou ');
+        // Junta todas as opções corretas para mostrar ao utilizador
+        final displayCorrect = _validAnswersNormal.join(' ou ');
         _resultTextNormal = 'Incorreta. O correto é: $displayCorrect'; _resultColorNormal = Colors.red;
       }
     });
@@ -704,7 +732,7 @@ class _PracticeTabState extends State<PracticeTab> {
     );
   }
 
-  // --- Nível 1: Sorteio Normal ---
+// --- Nível 1: Sorteio Normal ---
   Widget _buildNormalPractice() {
     return Column(
       children: [
@@ -714,7 +742,19 @@ class _PracticeTabState extends State<PracticeTab> {
             child: Column(
               children: [
                 Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                  const Text("Modo de Sorteio Clássico", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+                  Row(
+                    children: [
+                      const Text("Modo Clássico", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+                      IconButton(
+                        icon: const Icon(Icons.sync_alt, color: Colors.blue, size: 20),
+                        tooltip: "Inverter Idioma (Responder em ${widget.currentLang})",
+                        onPressed: () {
+                          setState(() { _isReversedNormal = !_isReversedNormal; });
+                          _drawWordNormal(); // Sorteia nova palavra ao inverter
+                        },
+                      ),
+                    ],
+                  ),
                   Text("🔥 $_streak", style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 18)),
                 ]),
                 const SizedBox(height: 10),
@@ -723,19 +763,22 @@ class _PracticeTabState extends State<PracticeTab> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Flexible(child: Text(_currentWordNormal?['ingles'] ?? 'Clique acima para sortear', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold), textAlign: TextAlign.center)),
-                    if (_currentWordNormal != null) IconButton(icon: const Icon(Icons.volume_up, color: Colors.blue, size: 28), tooltip: "Ouvir", onPressed: () => _falar(_currentWordNormal!['ingles'])),
+                    Flexible(child: Text(_questionToDisplay.isEmpty ? 'Clique acima para sortear' : _questionToDisplay, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold), textAlign: TextAlign.center)),
+                    if (_currentWordNormal != null && !_isReversedNormal)
+                      IconButton(icon: const Icon(Icons.volume_up, color: Colors.blue, size: 28), tooltip: "Ouvir", onPressed: () => _falar(_currentWordNormal!['ingles'])),
                   ],
                 ),
                 const SizedBox(height: 20),
                 TextField(
                     controller: _answerCtrl,
                     enabled: _currentWordNormal != null && !_hasAnsweredNormal,
-                    decoration: const InputDecoration(labelText: 'Sua Tradução', border: OutlineInputBorder()),
+                    decoration: InputDecoration(
+                        labelText: _isReversedNormal ? 'Responder em ${widget.currentLang}' : 'Sua Tradução',
+                        border: const OutlineInputBorder()
+                    ),
                     onChanged: (v) => setState((){})
                 ),
                 const SizedBox(height: 15),
-                // Botão trava automaticamente se a resposta já foi enviada
                 ElevatedButton(
                     onPressed: (_currentWordNormal == null || _answerCtrl.text.isEmpty || _hasAnsweredNormal) ? null : _verifyAnswerNormal,
                     child: const Text('Confirmar Resposta')
@@ -1231,6 +1274,7 @@ class LibraryTab extends StatefulWidget {
 class _LibraryTabState extends State<LibraryTab> {
   List<Map<String, dynamic>> _distinctWords = [];
   final _searchCtrl = TextEditingController();
+  int _totalWordsCount = 0; // Nova variável para o contador total
 
   @override
   void initState() {
@@ -1240,7 +1284,12 @@ class _LibraryTabState extends State<LibraryTab> {
 
   Future<void> _loadWords([String query = '']) async {
     final words = await DatabaseHelper.instance.fetchDistinctWords(widget.currentLang, query);
-    setState(() => _distinctWords = words);
+    // Busca sempre o total limpo para manter o contador atualizado independente da pesquisa
+    final totalWords = await DatabaseHelper.instance.fetchDistinctWords(widget.currentLang, '');
+    setState(() {
+      _distinctWords = words;
+      _totalWordsCount = totalWords.length;
+    });
   }
 
   void _abrirDetalhes(String ingles) async {
@@ -1254,11 +1303,21 @@ class _LibraryTabState extends State<LibraryTab> {
       padding: const EdgeInsets.all(10.0),
       child: Column(
         children: [
-          Text("Sua Biblioteca em ${widget.currentLang}", style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text("Sua Biblioteca em ${widget.currentLang}", style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const SizedBox(width: 8),
+              // Contador discreto em cinza menor
+              Text("($_totalWordsCount registradas)", style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            ],
+          ),
           const SizedBox(height: 10),
           TextField(
               controller: _searchCtrl,
-              decoration: const InputDecoration(labelText: 'Pesquisar...', prefixIcon: Icon(Icons.search), border: OutlineInputBorder()),
+              decoration: const InputDecoration(labelText: 'Pesquisar...', prefixIcon: Icon(Icons.search), border: const OutlineInputBorder()),
               onChanged: (value) => _loadWords(value)
           ),
           const SizedBox(height: 10),
@@ -1292,7 +1351,6 @@ class _LibraryTabState extends State<LibraryTab> {
     );
   }
 }
-
 class WordDetailsScreen extends StatefulWidget {
   final String ingles;
   final String currentLang;
