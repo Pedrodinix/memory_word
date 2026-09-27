@@ -31,30 +31,26 @@ const Map<String, AppLanguage> supportedLanguages = {
 };
 
 final ValueNotifier<ThemeMode> appThemeMode = ValueNotifier(ThemeMode.light);
-final ValueNotifier<String> appLanguage = ValueNotifier('Inglês'); // Idioma a ESTUDAR
-final ValueNotifier<String> appNativeLanguage = ValueNotifier('Português'); // Idioma NATIVO da interface
+final ValueNotifier<String> appLanguage = ValueNotifier('Inglês');
+final ValueNotifier<String> appNativeLanguage = ValueNotifier('Português');
 final ValueNotifier<bool> appFeedbackEnabled = ValueNotifier(true);
+final ValueNotifier<bool> appTreinoInteligente = ValueNotifier(false); // NOVO: Toggle Inteligente
 
 // --- MOTOR DE TRADUÇÃO GLOBAL ---
 String t(String text) {
   String code = supportedLanguages[appNativeLanguage.value]?.transCode ?? 'pt';
-  if (code == 'pt') return text; // Se for português, retorna o texto original
+  if (code == 'pt') return text;
 
   const Map<String, Map<String, String>> dict = {
-    // Idiomas
     'Inglês': {'en': 'English', 'de': 'Englisch', 'es': 'Inglés', 'fr': 'Anglais'},
     'Alemão': {'en': 'German', 'de': 'Deutsch', 'es': 'Alemán', 'fr': 'Allemand'},
     'Espanhol': {'en': 'Spanish', 'de': 'Spanisch', 'es': 'Español', 'fr': 'Espagnol'},
     'Português': {'en': 'Portuguese', 'de': 'Portugiesisch', 'es': 'Portugués', 'fr': 'Portugais'},
     'Francês': {'en': 'French', 'de': 'Französisch', 'es': 'Francés', 'fr': 'Français'},
-
-    // Abas e Menus
     'Novo': {'en': 'New', 'de': 'Neu', 'es': 'Nuevo', 'fr': 'Nouveau'},
     'Praticar': {'en': 'Practice', 'de': 'Üben', 'es': 'Practicar', 'fr': 'Pratiquer'},
     'Biblioteca': {'en': 'Library', 'de': 'Bibliothek', 'es': 'Biblioteca', 'fr': 'Bibliothèque'},
     'Configurações': {'en': 'Settings', 'de': 'Einstellungen', 'es': 'Ajustes', 'fr': 'Paramètres'},
-
-    // Tela Configurações
     'Idioma de Estudo Principal': {'en': 'Main Study Language', 'de': 'Hauptlernsprache', 'es': 'Idioma de Estudio', 'fr': "Langue d'étude principale"},
     'Seu Idioma (Origem)': {'en': 'Your Native Language', 'de': 'Deine Muttersprache', 'es': 'Tu Idioma Nativo', 'fr': 'Votre Langue Maternelle'},
     'Aprender': {'en': 'Learn', 'de': 'Lernen', 'es': 'Aprender', 'fr': 'Apprendre'},
@@ -70,8 +66,6 @@ String t(String text) {
     'Personalizado': {'en': 'Custom', 'de': 'Benutzerdef.', 'es': 'Personalizado', 'fr': 'Personnalisé'},
     'Salvar': {'en': 'Save', 'de': 'Speichern', 'es': 'Guardar', 'fr': 'Enregistrer'},
     'Configurações salvas!': {'en': 'Settings saved!', 'de': 'Gespeichert!', 'es': '¡Ajustes guardados!', 'fr': 'Paramètres enregistrés !'},
-
-    // Registro
     'Registar Palavra': {'en': 'Register Word', 'de': 'Wort registrieren', 'es': 'Registrar Palabra', 'fr': 'Enregistrer le mot'},
     'Palavra em': {'en': 'Word in', 'de': 'Wort auf', 'es': 'Palabra en', 'fr': 'Mot en'},
     'Significado / Tradução': {'en': 'Meaning / Translation', 'de': 'Bedeutung / Übersetzung', 'es': 'Significado / Traducción', 'fr': 'Signification / Traduction'},
@@ -81,8 +75,6 @@ String t(String text) {
     'Remover Foto': {'en': 'Remove Photo', 'de': 'Foto entfernen', 'es': 'Eliminar Foto', 'fr': 'Supprimer la photo'},
     'Preencha a palavra e a tradução antes de salvar.': {'en': 'Fill word and translation before saving.', 'de': 'Bitte Wort und Übersetzung eingeben.', 'es': 'Rellene palabra y traducción antes de guardar.', 'fr': 'Remplissez le mot et la traduction avant d\'enregistrer.'},
     'Palavra salva com sucesso!': {'en': 'Word saved successfully!', 'de': 'Wort erfolgreich gespeichert!', 'es': '¡Palabra guardada con éxito!', 'fr': 'Mot enregistré avec succès !'},
-
-    // Prática (Clássico & Comum)
     'Modo Clássico': {'en': 'Classic Mode', 'de': 'Klassischer Modus', 'es': 'Modo Clásico', 'fr': 'Mode Classique'},
     'Sortear Palavra': {'en': 'Draw Word', 'de': 'Wort ziehen', 'es': 'Sortear Palabra', 'fr': 'Tirer un mot'},
     'Clique acima para sortear': {'en': 'Click above to draw', 'de': 'Klicken um zu ziehen', 'es': 'Haz clic arriba para sortear', 'fr': 'Cliquez ci-dessus pour tirer'},
@@ -93,8 +85,6 @@ String t(String text) {
     'Incorreta. O correto é:': {'en': 'Incorrect. Correct is:', 'de': 'Falsch. Richtig ist:', 'es': 'Incorrecta. Lo correcto es:', 'fr': 'Incorrect. La bonne réponse est :'},
     'ou': {'en': 'or', 'de': 'oder', 'es': 'o', 'fr': 'ou'},
     'Desempenho': {'en': 'Performance', 'de': 'Leistung', 'es': 'Rendimiento', 'fr': 'Performance'},
-
-    // Papagaio
     'Modo Papagaio': {'en': 'Parrot Mode', 'de': 'Papageienmodus', 'es': 'Modo Loro', 'fr': 'Mode Perroquet'},
     'Filtro de Palavras': {'en': 'Words Filter', 'de': 'Wortfilter', 'es': 'Filtro de Palabras', 'fr': 'Filtre de Mots'},
     'Velocidade da Voz': {'en': 'Voice Speed', 'de': 'Sprachgeschwindigkeit', 'es': 'Velocidad de Voz', 'fr': 'Vitesse de la voix'},
@@ -106,8 +96,6 @@ String t(String text) {
     'Pronto para voar!': {'en': 'Ready to fly!', 'de': 'Bereit zum Fliegen!', 'es': '¡Listo para volar!', 'fr': 'Prêt à voler !'},
     'Sua biblioteca está vazia!': {'en': 'Your library is empty!', 'de': 'Deine Bibliothek ist leer!', 'es': '¡Tu biblioteca está vacía!', 'fr': 'Votre bibliothèque est vide !'},
     'Sequência Concluída!': {'en': 'Sequence Completed!', 'de': 'Sequenz abgeschlossen!', 'es': '¡Secuencia Completada!', 'fr': 'Séquence Terminée !'},
-
-    // Língua Afiada
     'Língua Afiada': {'en': 'Sharp Tongue', 'de': 'Scharfe Zunge', 'es': 'Lengua Afilada', 'fr': 'Langue Pendue'},
     'Sortear Nova Palavra': {'en': 'Draw New Word', 'de': 'Neues Wort ziehen', 'es': 'Sortear Nueva Palabra', 'fr': 'Tirer un nouveau mot'},
     'Sorteie para começar': {'en': 'Draw to start', 'de': 'Ziehen um zu starten', 'es': 'Sortea para empezar', 'fr': 'Tirez pour commencer'},
@@ -115,8 +103,6 @@ String t(String text) {
     'A escutar... Fale agora!': {'en': 'Listening... Speak now!', 'de': 'Höre zu... Sprich jetzt!', 'es': 'Escuchando... ¡Habla ahora!', 'fr': 'Écoute... Parlez maintenant !'},
     'Pronúncia Perfeita! 🎉': {'en': 'Perfect Pronunciation! 🎉', 'de': 'Perfekte Aussprache! 🎉', 'es': '¡Pronunciación Perfecta! 🎉', 'fr': 'Prononciation Parfaite ! 🎉'},
     'Entendemos:': {'en': 'We heard:', 'de': 'Wir haben verstanden:', 'es': 'Entendimos:', 'fr': 'Nous avons compris :'},
-
-    // Desempenho
     'Seu Desempenho': {'en': 'Your Performance', 'de': 'Deine Leistung', 'es': 'Tu Rendimiento', 'fr': 'Votre Performance'},
     'Desempenho de Hoje': {'en': 'Performance Today', 'de': 'Leistung Heute', 'es': 'Rendimiento de Hoy', 'fr': "Performances d'aujourd'hui"},
     'Últimos 7 Dias': {'en': 'Last 7 Days', 'de': 'Letzte 7 Tage', 'es': 'Últimos 7 Días', 'fr': 'Les 7 Derniers Jours'},
@@ -125,8 +111,6 @@ String t(String text) {
     'Acertos / Erros:': {'en': 'Hits / Misses:', 'de': 'Treffer / Fehler:', 'es': 'Aciertos / Errores:', 'fr': 'Réussites / Échecs :'},
     'Combos Especiais 🎉:': {'en': 'Special Combos 🎉:', 'de': 'Spezielle Kombos 🎉:', 'es': 'Combos Especiales 🎉:', 'fr': 'Combos Spéciaux 🎉:'},
     'Tempo no Papagaio 🦜:': {'en': 'Parrot Time 🦜:', 'de': 'Papageienzeit 🦜:', 'es': 'Tiempo en Loro 🦜:', 'fr': 'Temps Perroquet 🦜:'},
-
-    // Biblioteca
     'Sua Biblioteca em': {'en': 'Your Library in', 'de': 'Deine Bibliothek in', 'es': 'Tu Biblioteca en', 'fr': 'Votre Bibliothèque en'},
     'registradas': {'en': 'registered', 'de': 'registriert', 'es': 'registradas', 'fr': 'enregistrées'},
     'Pesquisar...': {'en': 'Search...', 'de': 'Suchen...', 'es': 'Buscar...', 'fr': 'Rechercher...'},
@@ -143,6 +127,13 @@ String t(String text) {
     'Cancelar': {'en': 'Cancel', 'de': 'Abbrechen', 'es': 'Cancelar', 'fr': 'Annuler'},
     'Sim': {'en': 'Yes', 'de': 'Ja', 'es': 'Sí', 'fr': 'Oui'},
     'Excluir': {'en': 'Delete', 'de': 'Löschen', 'es': 'Eliminar', 'fr': 'Supprimer'},
+    // NOVOS TEXTOS DE TREINO INTELIGENTE
+    'Treino Inteligente': {'en': 'Smart Training', 'de': 'Intelligentes Training', 'es': 'Entrenamiento Inteligente', 'fr': 'Entraînement Intelligent'},
+    'Priorizar as palavras que você mais erra': {'en': 'Prioritize the words you miss the most', 'de': 'Priorisiere Wörter, die du oft falsch machst', 'es': 'Priorizar las palabras que más fallas', 'fr': 'Privilégier les mots que vous ratez le plus'},
+    'Bom (Verde)': {'en': 'Good (Green)', 'de': 'Gut (Grün)', 'es': 'Bueno (Verde)', 'fr': 'Bon (Vert)'},
+    'Médio (Amarelo)': {'en': 'Medium (Yellow)', 'de': 'Mittel (Gelb)', 'es': 'Medio (Amarillo)', 'fr': 'Moyen (Jaune)'},
+    'Ruim (Vermelho)': {'en': 'Bad (Red)', 'de': 'Schlecht (Rot)', 'es': 'Deficiente (Rojo)', 'fr': 'Mauvais (Rouge)'},
+    'Dificuldade Atual:': {'en': 'Current Difficulty:', 'de': 'Aktuelle Schwierigkeit:', 'es': 'Dificultad Actual:', 'fr': 'Difficulté Actuelle :'},
   };
   return dict[text]?[code] ?? text;
 }
@@ -154,18 +145,22 @@ void main() async {
 
   String temaSalvo = await db.getConfig('tema');
   String idiomaSalvo = await db.getConfig('idioma_atual');
-  String idiomaNativoSalvo = await db.getConfig('idioma_nativo'); // Novo
+  String idiomaNativoSalvo = await db.getConfig('idioma_nativo');
   String feedbackSalvo = await db.getConfig('feedback_ativo');
+  String treinoSalvo = await db.getConfig('treino_inteligente');
 
   appThemeMode.value = (temaSalvo == 'dark') ? ThemeMode.dark : ThemeMode.light;
   if (idiomaSalvo.isNotEmpty && supportedLanguages.containsKey(idiomaSalvo)) {
     appLanguage.value = idiomaSalvo;
   }
   if (idiomaNativoSalvo.isNotEmpty && supportedLanguages.containsKey(idiomaNativoSalvo)) {
-    appNativeLanguage.value = idiomaNativoSalvo; // Novo
+    appNativeLanguage.value = idiomaNativoSalvo;
   }
   if (feedbackSalvo.isNotEmpty) {
     appFeedbackEnabled.value = (feedbackSalvo == 'true');
+  }
+  if (treinoSalvo.isNotEmpty) {
+    appTreinoInteligente.value = (treinoSalvo == 'true');
   }
 
   runApp(const MemoryWordApp());
@@ -192,9 +187,10 @@ class DatabaseHelper {
 
     return await openDatabase(
       fullPath,
-      version: 7,
+      version: 8, // Subiu para a versão 8 para suportar o Ranking
       onCreate: (db, version) async {
-        await db.execute('''CREATE TABLE palavras (id INTEGER PRIMARY KEY AUTOINCREMENT, ingles TEXT NOT NULL, traducao TEXT NOT NULL, imagem TEXT, lingua TEXT NOT NULL DEFAULT 'Inglês')''');
+        // Nova coluna 'erros' adicionada na criação principal
+        await db.execute('''CREATE TABLE palavras (id INTEGER PRIMARY KEY AUTOINCREMENT, ingles TEXT NOT NULL, traducao TEXT NOT NULL, imagem TEXT, lingua TEXT NOT NULL DEFAULT 'Inglês', erros INTEGER DEFAULT 0)''');
         await db.execute('''CREATE TABLE configuracoes (chave TEXT PRIMARY KEY, valor TEXT)''');
         await db.execute('''CREATE TABLE estatisticas (data TEXT PRIMARY KEY, respondidas INTEGER DEFAULT 0, acertos INTEGER DEFAULT 0, erros INTEGER DEFAULT 0, especiais INTEGER DEFAULT 0, tempo_papagaio INTEGER DEFAULT 0)''');
         await db.execute('''CREATE TABLE estatisticas_mensais (mes TEXT PRIMARY KEY, respondidas INTEGER DEFAULT 0, acertos INTEGER DEFAULT 0, erros INTEGER DEFAULT 0, especiais INTEGER DEFAULT 0, tempo_papagaio INTEGER DEFAULT 0)''');
@@ -202,8 +198,9 @@ class DatabaseHelper {
         await db.insert('configuracoes', {'chave': 'filtro', 'valor': 'todas'});
         await db.insert('configuracoes', {'chave': 'tema', 'valor': 'light'});
         await db.insert('configuracoes', {'chave': 'idioma_atual', 'valor': 'Inglês'});
-        await db.insert('configuracoes', {'chave': 'idioma_nativo', 'valor': 'Português'}); // Inserido padrão nativo
+        await db.insert('configuracoes', {'chave': 'idioma_nativo', 'valor': 'Português'});
         await db.insert('configuracoes', {'chave': 'feedback_ativo', 'valor': 'true'});
+        await db.insert('configuracoes', {'chave': 'treino_inteligente', 'valor': 'false'});
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 3) try { await db.execute("ALTER TABLE palavras ADD COLUMN lingua TEXT DEFAULT 'Inglês'"); } catch (_) {}
@@ -211,8 +208,33 @@ class DatabaseHelper {
           await db.execute('''CREATE TABLE IF NOT EXISTS estatisticas (data TEXT PRIMARY KEY, respondidas INTEGER DEFAULT 0, acertos INTEGER DEFAULT 0, erros INTEGER DEFAULT 0, especiais INTEGER DEFAULT 0, tempo_papagaio INTEGER DEFAULT 0)''');
           await db.execute('''CREATE TABLE IF NOT EXISTS estatisticas_mensais (mes TEXT PRIMARY KEY, respondidas INTEGER DEFAULT 0, acertos INTEGER DEFAULT 0, erros INTEGER DEFAULT 0, especiais INTEGER DEFAULT 0, tempo_papagaio INTEGER DEFAULT 0)''');
         }
+        if (oldVersion < 8) {
+          // Atualiza tabelas antigas para suportarem o novo sistema de pontuação
+          try { await db.execute("ALTER TABLE palavras ADD COLUMN erros INTEGER DEFAULT 0"); } catch (_) {}
+        }
       },
     );
+  }
+
+  // --- LÓGICA DE DIFICULDADE DE PALAVRA (NOVO) ---
+  Future<void> atualizarDificuldade(String ingles, String lingua, bool acertou) async {
+    final db = await instance.database;
+    // Pega o erro máximo atual dessa palavra específica
+    final res = await db.rawQuery('SELECT MAX(erros) as erros FROM palavras WHERE ingles = ? COLLATE NOCASE AND lingua = ?', [ingles, lingua]);
+    int errosAtuais = 0;
+    if (res.isNotEmpty && res.first['erros'] != null) {
+      errosAtuais = (res.first['erros'] as num).toInt();
+    }
+
+    // Matemática do Ranking (Verde: 0-2, Amarelo: 3-4, Vermelho: 5-6)
+    if (acertou) {
+      errosAtuais = max(0, errosAtuais - 1); // Diminui erro até mínimo de 0
+    } else {
+      errosAtuais = min(6, errosAtuais + 1); // Aumenta erro até máximo de 6
+    }
+
+    // Atualiza a pontuação em todos os significados dessa mesma palavra
+    await db.execute('UPDATE palavras SET erros = ? WHERE ingles = ? COLLATE NOCASE AND lingua = ?', [errosAtuais, ingles, lingua]);
   }
 
   Future<void> registrarAtividade(String coluna, [int valor = 1]) async {
@@ -269,19 +291,27 @@ class DatabaseHelper {
     await db.insert('palavras', row, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
+  // Lógica de Sorteio (Agora com suporte ao Treino Inteligente)
   Future<List<Map<String, dynamic>>> fetchCustomWords(String linguaAtual, String filtro, String customVal) async {
     final db = await instance.database;
     int limit = -1;
     if (filtro != 'todas') { limit = filtro == 'custom' ? (int.tryParse(customVal) ?? -1) : (int.tryParse(filtro) ?? -1); }
-    String query = '''SELECT ingles, GROUP_CONCAT(traducao, '|') as traducoes, MAX(imagem) as imagem FROM palavras WHERE lingua = ? GROUP BY ingles COLLATE NOCASE ORDER BY MAX(id) DESC''';
+
+    // Se o Treino Inteligente estiver ligado, força o banco de dados a priorizar os maiores erros
+    String orderBy = 'MAX(id) DESC';
+    if (appTreinoInteligente.value) {
+      orderBy = 'MAX(erros) DESC, RANDOM()'; // Mistura palavras dentro do mesmo nível de erro
+    }
+
+    String query = '''SELECT ingles, GROUP_CONCAT(traducao, '|') as traducoes, MAX(imagem) as imagem, MAX(erros) as erros FROM palavras WHERE lingua = ? GROUP BY ingles COLLATE NOCASE ORDER BY $orderBy''';
     if (limit > 0) query += ' LIMIT $limit';
     return await db.rawQuery(query, [linguaAtual]);
   }
 
   Future<List<Map<String, dynamic>>> fetchDistinctWords(String linguaAtual, [String query = '']) async {
     final db = await instance.database;
-    if (query.isEmpty) { return await db.rawQuery('''SELECT ingles, MAX(imagem) as imagem, GROUP_CONCAT(traducao, ', ') as traducao FROM palavras WHERE lingua = ? GROUP BY ingles COLLATE NOCASE ORDER BY ingles COLLATE NOCASE ASC''', [linguaAtual]);
-    } else { return await db.rawQuery('''SELECT ingles, MAX(imagem) as imagem, GROUP_CONCAT(traducao, ', ') as traducao FROM palavras WHERE lingua = ? AND (ingles LIKE ? OR traducao LIKE ?) GROUP BY ingles COLLATE NOCASE ORDER BY ingles COLLATE NOCASE ASC''', [linguaAtual, '%$query%', '%$query%']); }
+    if (query.isEmpty) { return await db.rawQuery('''SELECT ingles, MAX(imagem) as imagem, GROUP_CONCAT(traducao, ', ') as traducao, MAX(erros) as erros FROM palavras WHERE lingua = ? GROUP BY ingles COLLATE NOCASE ORDER BY ingles COLLATE NOCASE ASC''', [linguaAtual]);
+    } else { return await db.rawQuery('''SELECT ingles, MAX(imagem) as imagem, GROUP_CONCAT(traducao, ', ') as traducao, MAX(erros) as erros FROM palavras WHERE lingua = ? AND (ingles LIKE ? OR traducao LIKE ?) GROUP BY ingles COLLATE NOCASE ORDER BY ingles COLLATE NOCASE ASC''', [linguaAtual, '%$query%', '%$query%']); }
   }
 
   Future<List<Map<String, dynamic>>> fetchMeanings(String ingles, String linguaAtual) async {
@@ -306,7 +336,6 @@ class MemoryWordApp extends StatelessWidget {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: appThemeMode,
       builder: (context, currentMode, child) {
-        // Envolvemos toda a app para reconstruir a UI quando o idioma Nativo muda
         return ValueListenableBuilder<String>(
           valueListenable: appNativeLanguage,
           builder: (context, currentNativeLang, child) {
@@ -493,8 +522,11 @@ class _PracticeTabState extends State<PracticeTab> {
   void _playSpecialSound() async { if (!appFeedbackEnabled.value) return; try { await _audioSpecial.stop(); await _audioSpecial.play(AssetSource('special.mp3')); } catch (e) {} }
   void _playWrongSound() async { if (!appFeedbackEnabled.value) return; try { await _audioWrong.stop(); await _audioWrong.play(AssetSource('wrong.mp3')); } catch (e) {} }
 
-  void _handleAnswer(bool isCorrect) {
+  void _handleAnswer(bool isCorrect, String wordIngles) {
     DatabaseHelper.instance.registrarAtividade('respondidas');
+    // NOVO: Atualiza a dificuldade baseada na resposta da palavra exata
+    DatabaseHelper.instance.atualizarDificuldade(wordIngles, widget.currentLang, isCorrect);
+
     if (isCorrect) {
       DatabaseHelper.instance.registrarAtividade('acertos');
       _streak++;
@@ -538,6 +570,35 @@ class _PracticeTabState extends State<PracticeTab> {
           ],
         ),
       ),
+    );
+  }
+
+  // --- BOTÃO GLOBAL DE TREINO INTELIGENTE ---
+  Widget _buildSmartTrainingToggle() {
+    return ValueListenableBuilder<bool>(
+        valueListenable: appTreinoInteligente,
+        builder: (context, isSmart, child) {
+          return Card(
+            color: isSmart ? Colors.blue.shade50 : null,
+            margin: const EdgeInsets.only(bottom: 15),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: BorderSide(color: isSmart ? Colors.blue : Colors.transparent, width: 2)),
+            child: SwitchListTile(
+              secondary: const Text('🧠', style: TextStyle(fontSize: 24)),
+              title: Text(t("Treino Inteligente"), style: const TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text(t("Priorizar as palavras que você mais erra"), style: const TextStyle(fontSize: 12)),
+              value: isSmart,
+              onChanged: (val) {
+                appTreinoInteligente.value = val;
+                DatabaseHelper.instance.updateConfig('treino_inteligente', val.toString());
+                // Força o re-sorteio de palavras ao ligar/desligar a dificuldade
+                if (!_isParrotPlaying && !_isListening) {
+                  if (_pageController.page == 0) _drawWordNormal();
+                  if (_pageController.page == 2) _drawWordSharp();
+                }
+              },
+            ),
+          );
+        }
     );
   }
 
@@ -585,7 +646,7 @@ class _PracticeTabState extends State<PracticeTab> {
       }
     });
 
-    _handleAnswer(acertou);
+    _handleAnswer(acertou, _currentWordNormal!['ingles']); // Passa a palavra original
     await Future.delayed(const Duration(milliseconds: 2500));
     if (mounted && _hasAnsweredNormal) { _drawWordNormal(); }
   }
@@ -658,7 +719,6 @@ class _PracticeTabState extends State<PracticeTab> {
 
           String trad = word['traducoes'].toString().replaceAll('|', ' ${t('ou')} ');
           if (mounted) setState(() => _parrotCurrentWordDisplay = trad);
-          // Usa DIRETAMENTE o idioma nativo global (Sem a barrinha individual)
           AppLanguage nativeLang = supportedLanguages[appNativeLanguage.value] ?? supportedLanguages['Português']!;
           await _flutterTts.setLanguage(nativeLang.ttsCode); await _flutterTts.setSpeechRate(0.5 * _parrotSpeed); await _flutterTts.speak(trad);
 
@@ -730,7 +790,7 @@ class _PracticeTabState extends State<PracticeTab> {
       }
     });
 
-    _handleAnswer(acertou);
+    _handleAnswer(acertou, _currentWordSharp!['ingles']); // Passa a palavra original
     await Future.delayed(const Duration(milliseconds: 2500));
     if (mounted && _hasAnsweredSharp) { _drawWordSharp(); }
   }
@@ -797,6 +857,7 @@ class _PracticeTabState extends State<PracticeTab> {
             padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
             child: Column(
               children: [
+                _buildSmartTrainingToggle(), // CHAVE DE DIFICULDADE AQUI
                 Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                   Row(
                     children: [
@@ -862,6 +923,7 @@ class _PracticeTabState extends State<PracticeTab> {
             padding: const EdgeInsets.symmetric(horizontal: 20.0),
             child: Column(
               children: [
+                _buildSmartTrainingToggle(), // CHAVE DE DIFICULDADE AQUI
                 Row(mainAxisAlignment: MainAxisAlignment.center, children: [ const Text('🦜', style: TextStyle(fontSize: 30)), const SizedBox(width: 10), Text(t('Modo Papagaio'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)) ]),
                 const Divider(height: 15),
 
@@ -913,6 +975,7 @@ class _PracticeTabState extends State<PracticeTab> {
             child: SingleChildScrollView(
               child: Column(
                 children: [
+                  _buildSmartTrainingToggle(), // CHAVE DE DIFICULDADE AQUI
                   Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                     const Text(""), Text("🔥 $_streak", style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 18)),
                   ]),
@@ -1159,7 +1222,6 @@ class _SettingsSheetState extends State<SettingsSheet> {
               ),
               const SizedBox(height: 20),
 
-              // --- NOVA ABA DE IDIOMA NATIVO ---
               Text(t("Seu Idioma (Origem)"), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
@@ -1231,7 +1293,6 @@ class _RegisterTabState extends State<RegisterTab> {
     try {
       AppLanguage langData = supportedLanguages[widget.currentLang]!;
       final translator = tr.GoogleTranslator();
-      // O Tradutor agora envia os dados para a sua LÍNGUA DE ORIGEM Global
       String targetLangCode = supportedLanguages[appNativeLanguage.value]!.transCode;
       final translation = await translator.translate(_inglesCtrl.text.trim(), from: langData.transCode, to: targetLangCode);
       setState(() => _traducaoCtrl.text = translation.text);
@@ -1273,6 +1334,7 @@ class _RegisterTabState extends State<RegisterTab> {
         );
         if (addAnother != true) return;
       }
+      // Nova palavra entra sempre com 'erros: 0' (Verde) pelo SQLite Default.
       await db.insertWord({'ingles': _inglesCtrl.text.trim(), 'traducao': _traducaoCtrl.text.trim(), 'imagem': _imageFile?.path ?? '', 'lingua': widget.currentLang});
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t('Palavra salva com sucesso!')), backgroundColor: Colors.green));
@@ -1353,7 +1415,7 @@ class _LibraryTabState extends State<LibraryTab> {
 
   void _abrirDetalhes(String ingles) async {
     await Navigator.push(context, MaterialPageRoute(builder: (context) => WordDetailsScreen(ingles: ingles, currentLang: widget.currentLang)));
-    _loadWords(_searchCtrl.text);
+    _loadWords(_searchCtrl.text); // Recarrega se houve alterações
   }
 
   @override
@@ -1388,6 +1450,10 @@ class _LibraryTabState extends State<LibraryTab> {
                 final word = _distinctWords[index];
                 final hasImage = word['imagem'] != null && word['imagem'].toString().isNotEmpty;
 
+                // NOVO: Cálculo das Cores do Ranking!
+                int erros = word['erros'] ?? 0;
+                Color dotColor = erros >= 5 ? Colors.red : (erros >= 3 ? Colors.amber : Colors.green);
+
                 return Card(
                   elevation: 2,
                   margin: const EdgeInsets.symmetric(vertical: 6),
@@ -1397,7 +1463,15 @@ class _LibraryTabState extends State<LibraryTab> {
                         : const CircleAvatar(child: Icon(Icons.text_fields)),
                     title: Text(word['ingles'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                     subtitle: Text(word['traducao'] ?? ''),
-                    trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // NOVO: A Bolinha de Dificuldade
+                        Container(width: 14, height: 14, decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle)),
+                        const SizedBox(width: 10),
+                        const Icon(Icons.chevron_right, color: Colors.grey),
+                      ],
+                    ),
                     onTap: () => _abrirDetalhes(word['ingles']),
                   ),
                 );
@@ -1446,28 +1520,52 @@ class _WordDetailsScreenState extends State<WordDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    int erros = _meanings.isNotEmpty ? (_meanings[0]['erros'] ?? 0) : 0;
+    Color difColor = erros >= 5 ? Colors.red : (erros >= 3 ? Colors.amber : Colors.green);
+    String difText = erros >= 5 ? t("Ruim (Vermelho)") : (erros >= 3 ? t("Médio (Amarelo)") : t("Bom (Verde)"));
+
     return Scaffold(
       appBar: AppBar(
           title: Text(widget.ingles),
           actions: [IconButton(icon: const Icon(Icons.edit), tooltip: t("Editar Palavra"), onPressed: _irParaEdicao)]
       ),
-      body: ListView.separated(
-        padding: const EdgeInsets.all(20),
-        itemCount: _meanings.length,
-        separatorBuilder: (_, __) => const Divider(height: 40),
-        itemBuilder: (context, index) {
-          final sig = _meanings[index];
-          final hasImg = sig['imagem'].toString().isNotEmpty;
+      body: Column(
+        children: [
+          // Banner mostrando a Dificuldade Atual da Palavra
+          Container(
+            color: difColor.withOpacity(0.15),
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(width: 16, height: 16, decoration: BoxDecoration(color: difColor, shape: BoxShape.circle)),
+                const SizedBox(width: 8),
+                Text("${t('Dificuldade Atual:')} $difText", style: TextStyle(fontWeight: FontWeight.bold, color: difColor == Colors.amber ? Colors.orange.shade700 : difColor)),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView.separated(
+              padding: const EdgeInsets.all(20),
+              itemCount: _meanings.length,
+              separatorBuilder: (_, __) => const Divider(height: 40),
+              itemBuilder: (context, index) {
+                final sig = _meanings[index];
+                final hasImg = sig['imagem'].toString().isNotEmpty;
 
-          return Column(
-            children: [
-              Text("${t('Significado')} ${index + 1}: ${sig['traducao']}", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: index > 0 ? Colors.blue : null)),
-              const SizedBox(height: 10),
-              if (hasImg)
-                ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.file(File(sig['imagem']), height: 180, fit: BoxFit.contain))
-            ],
-          );
-        },
+                return Column(
+                  children: [
+                    Text("${t('Significado')} ${index + 1}: ${sig['traducao']}", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: index > 0 ? Colors.blue : null)),
+                    const SizedBox(height: 10),
+                    if (hasImg)
+                      ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.file(File(sig['imagem']), height: 180, fit: BoxFit.contain))
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1488,11 +1586,15 @@ class _EditWordScreenState extends State<EditWordScreen> {
   late TextEditingController _inglesCtrl;
   final List<Map<String, dynamic>> _editMeanings = [];
   final ImagePicker _picker = ImagePicker();
+  int _currentErrors = 0; // Armazena a dificuldade atual ao editar
 
   @override
   void initState() {
     super.initState();
     _inglesCtrl = TextEditingController(text: widget.ingles);
+    if (widget.meanings.isNotEmpty) {
+      _currentErrors = widget.meanings[0]['erros'] ?? 0;
+    }
     for (var m in widget.meanings) {
       _editMeanings.add({ 'id': m['id'], 'traducao': TextEditingController(text: m['traducao']), 'imagem': m['imagem'] });
     }
@@ -1546,7 +1648,8 @@ class _EditWordScreenState extends State<EditWordScreen> {
       for (var m in _editMeanings) {
         String tradText = (m['traducao'] as TextEditingController).text.trim();
         if (tradText.isNotEmpty) {
-          await db.insertWord({ 'ingles': _inglesCtrl.text.trim(), 'traducao': tradText, 'imagem': m['imagem'], 'lingua': widget.currentLang });
+          // Re-insere mantendo o ranking de erros que a palavra já tinha
+          await db.insertWord({ 'ingles': _inglesCtrl.text.trim(), 'traducao': tradText, 'imagem': m['imagem'], 'lingua': widget.currentLang, 'erros': _currentErrors });
         }
       }
 
