@@ -38,14 +38,17 @@ android {
         targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        multiDexEnabled = true
     }
 
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
-}
+} // <--- Chaveta adicionada aqui para fechar o bloco android
 
 kotlin {
     compilerOptions {
