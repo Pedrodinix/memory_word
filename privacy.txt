@@ -1,0 +1,9 @@
+Política de Privacidade para Memory Word
+
+O Memory Word foi desenvolvido como um aplicativo de estudo de vocabulário com funcionamento 100% offline.
+
+Recolha de Dados: O Memory Word não recolhe, armazena, transmite ou partilha quaisquer dados pessoais ou informações dos utilizadores em servidores externos.
+
+Armazenamento Local: Todos os dados, listas de palavras e progresso criados pelo utilizador são guardados estritamente no armazenamento local do dispositivo, utilizando uma base de dados SQLite privada do aplicativo.
+
+Contactos: Se tiver alguma dúvida sobre esta política de privacidade, pode entrar em contacto através do ecrã de suporte do programador na Google Play Store.
