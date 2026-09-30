@@ -36,8 +36,8 @@ android {
         applicationId = "com.pedrodiniz.memoryword"
         minSdk = flutter.minSdkVersion
         targetSdk = 36
-        versionCode = flutter.versionCode
-        versionName = flutter.versionName
+        versionCode = 4         // <--- Forçado manualmente para 4
+        versionName = "1.0.2"   // <--- Versão visível
         multiDexEnabled = true
     }
 
