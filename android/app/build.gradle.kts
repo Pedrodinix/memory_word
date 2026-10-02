@@ -36,19 +36,19 @@ android {
         applicationId = "com.pedrodiniz.memoryword"
         minSdk = flutter.minSdkVersion
         targetSdk = 36
-        versionCode = 4         // <--- Forçado manualmente para 4
-        versionName = "1.0.2"   // <--- Versão visível
+        versionCode = 5
+        versionName = "1.0.2"
         multiDexEnabled = true
     }
 
     buildTypes {
-        release {
+        getByName("release") {
             signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             isShrinkResources = false
         }
     }
-} // <--- Chaveta adicionada aqui para fechar o bloco android
+}
 
 kotlin {
     compilerOptions {
