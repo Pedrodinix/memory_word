@@ -1,0 +1,785 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_tts/flutter_tts.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:audioplayers/audioplayers.dart';
+import 'dart:io';
+import 'dart:math';
+
+import '../main.dart';
+import '../banco_de_dados/database_helper.dart';
+
+class PracticeTab extends StatefulWidget {
+  final String currentLang;
+  const PracticeTab({super.key, required this.currentLang});
+
+  @override
+  State<PracticeTab> createState() => _PracticeTabState();
+}
+
+class _PracticeTabState extends State<PracticeTab> {
+  final PageController _pageController = PageController(initialPage: 0);
+  final FlutterTts _flutterTts = FlutterTts();
+  late stt.SpeechToText _speech;
+
+  final AudioPlayer _audioCorrect = AudioPlayer();
+  final AudioPlayer _audioSpecial = AudioPlayer();
+  final AudioPlayer _audioWrong = AudioPlayer();
+
+  final Stopwatch _parrotStopwatch = Stopwatch();
+
+  int _streak = 0;
+  int _nextMilestone = 10;
+  bool _showSpecialOverlay = false;
+  int _overlayPoints = 0;
+
+  Map<String, dynamic>? _currentWordNormal;
+  final _answerCtrl = TextEditingController();
+  String _resultTextNormal = '';
+  Color _resultColorNormal = Colors.black;
+  bool _hasAnsweredNormal = false;
+
+  bool _isReversedNormal = false;
+  List<Map<String, dynamic>> _allFetchedWordsNormal = [];
+  String _questionToDisplay = '';
+  List<String> _validAnswersNormal = [];
+
+  String _parrotFilter = 'todas';
+  String _parrotCustomVal = '';
+  String _parrotMode = 'loop';
+  double _parrotSpeed = 1.0;
+  final TextEditingController _parrotCustomCtrl = TextEditingController();
+  bool _isParrotPlaying = false;
+  String _parrotCurrentWordDisplay = '';
+
+  Map<String, dynamic>? _currentWordSharp;
+  String _sharpFilter = 'todas';
+  String _sharpCustomVal = '';
+  final TextEditingController _sharpCustomCtrl = TextEditingController();
+  bool _isListening = false;
+  String _spokenText = '';
+  String _sharpResultText = '';
+  Color _sharpResultColor = Colors.black;
+  bool _hasAnsweredSharp = false;
+
+  bool _isSharpWriting = false;
+  final _sharpAnswerCtrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _speech = stt.SpeechToText();
+    _loadSettings();
+    _parrotCustomCtrl.addListener(() { _parrotCustomVal = _parrotCustomCtrl.text.trim(); _saveSettings(); });
+    _sharpCustomCtrl.addListener(() { _sharpCustomVal = _sharpCustomCtrl.text.trim(); _saveSettings(); });
+
+    _audioCorrect.setSource(AssetSource('correct.mp3'));
+    _audioSpecial.setSource(AssetSource('special.mp3'));
+    _audioWrong.setSource(AssetSource('wrong.mp3'));
+  }
+
+  @override
+  void didUpdateWidget(PracticeTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.currentLang != widget.currentLang) {
+      if (_isParrotPlaying) _stopParrot();
+      _currentWordNormal = null; _answerCtrl.clear(); _resultTextNormal = ''; _hasAnsweredNormal = false;
+      _currentWordSharp = null; _sharpResultText = ''; _spokenText = ''; _hasAnsweredSharp = false; _sharpAnswerCtrl.clear();
+      _streak = 0; _nextMilestone = 10;
+    }
+  }
+
+  @override
+  void dispose() {
+    _stopParrot();
+    _flutterTts.stop();
+    _audioCorrect.dispose();
+    _audioSpecial.dispose();
+    _audioWrong.dispose();
+    _pageController.dispose();
+    _parrotCustomCtrl.dispose();
+    _sharpCustomCtrl.dispose();
+    _answerCtrl.dispose();
+    _sharpAnswerCtrl.dispose();
+    super.dispose();
+  }
+
+  void _playCorrectSound() async { if (!appFeedbackEnabled.value) return; try { await _audioCorrect.stop(); await _audioCorrect.play(AssetSource('correct.mp3')); } catch (_) {} }
+  void _playSpecialSound() async { if (!appFeedbackEnabled.value) return; try { await _audioSpecial.stop(); await _audioSpecial.play(AssetSource('special.mp3')); } catch (_) {} }
+  void _playWrongSound() async { if (!appFeedbackEnabled.value) return; try { await _audioWrong.stop(); await _audioWrong.play(AssetSource('wrong.mp3')); } catch (_) {} }
+
+  void _handleAnswer(bool isCorrect, String wordIngles) {
+    DatabaseHelper.instance.registrarAtividade('respondidas');
+    DatabaseHelper.instance.atualizarDificuldade(wordIngles, widget.currentLang, isCorrect);
+
+    if (isCorrect) {
+      DatabaseHelper.instance.registrarAtividade('acertos');
+      _streak++;
+      if (_streak == _nextMilestone) {
+        DatabaseHelper.instance.registrarAtividade('especiais');
+        _triggerSpecialOverlay(_nextMilestone);
+        _nextMilestone = _nextMilestone < 30 ? _nextMilestone + 10 : _nextMilestone * 2;
+      } else { _playCorrectSound(); }
+    } else {
+      DatabaseHelper.instance.registrarAtividade('erros');
+      _streak = 0; _nextMilestone = 10;
+      _playWrongSound();
+      if (appFeedbackEnabled.value) HapticFeedback.vibrate();
+    }
+  }
+
+  void _triggerSpecialOverlay(int points) {
+    _playSpecialSound();
+    setState(() { _overlayPoints = points; _showSpecialOverlay = true; });
+    Future.delayed(const Duration(seconds: 3), () { if (mounted) setState(() => _showSpecialOverlay = false); });
+  }
+
+  Future<void> _falar(String texto, {double rate = 0.5}) async {
+    AppLanguage langData = supportedLanguages[widget.currentLang]!;
+    await _flutterTts.setLanguage(langData.ttsCode);
+    await _flutterTts.setSpeechRate(rate);
+    await _flutterTts.speak(texto);
+  }
+
+  Widget _buildMinimalArrow(IconData icon, String text, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon == Icons.keyboard_arrow_down) Icon(icon, color: Colors.grey, size: 20),
+            Text(text, style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold, fontSize: 11)),
+            if (icon == Icons.keyboard_arrow_up) Icon(icon, color: Colors.grey, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSmartTrainingToggle() {
+    return ValueListenableBuilder<bool>(
+        valueListenable: appTreinoInteligente,
+        builder: (context, isSmart, child) {
+          bool isDark = Theme.of(context).brightness == Brightness.dark;
+          Color? cardColor = isSmart ? (isDark ? Colors.blue.withValues(alpha: 0.2) : Colors.blue.shade50) : null;
+
+          return Card(
+            color: cardColor,
+            margin: const EdgeInsets.only(bottom: 15),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: BorderSide(color: isSmart ? Colors.blue : Colors.transparent, width: 2)),
+            child: SwitchListTile(
+              secondary: const Text('🧠', style: TextStyle(fontSize: 24)),
+              title: Text(t("Treino Inteligente"), style: const TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text(t("Priorizar as palavras que você mais erra"), style: const TextStyle(fontSize: 12)),
+              value: isSmart,
+              onChanged: (val) {
+                appTreinoInteligente.value = val;
+                DatabaseHelper.instance.updateConfig('treino_inteligente', val.toString());
+                if (!_isParrotPlaying && !_isListening) {
+                  if (_pageController.page == 0) _drawWordNormal();
+                  if (_pageController.page == 2) _drawWordSharp();
+                }
+              },
+            ),
+          );
+        }
+    );
+  }
+
+  Future<void> _drawWordNormal() async {
+    final words = await DatabaseHelper.instance.fetchCustomWords(widget.currentLang, 'todas', '');
+    if (words.isEmpty) { setState(() { _resultTextNormal = t('Sua biblioteca está vazia!'); _resultColorNormal = Colors.blue; }); return; }
+
+    setState(() {
+      _allFetchedWordsNormal = words;
+      _currentWordNormal = words[Random().nextInt(words.length)];
+      _answerCtrl.clear();
+      _resultTextNormal = '';
+      _hasAnsweredNormal = false;
+
+      if (!_isReversedNormal) {
+        _questionToDisplay = _currentWordNormal!['ingles'];
+        _validAnswersNormal = _currentWordNormal!['traducoes'].toString().split('|').map((e) => e.trim().toLowerCase()).toList();
+      } else {
+        final meanings = _currentWordNormal!['traducoes'].toString().split('|').map((e) => e.trim()).toList();
+        _questionToDisplay = meanings[Random().nextInt(meanings.length)];
+        _validAnswersNormal = [];
+        for (var w in _allFetchedWordsNormal) {
+          final wMeanings = w['traducoes'].toString().split('|').map((e) => e.trim().toLowerCase()).toList();
+          if (wMeanings.contains(_questionToDisplay.toLowerCase())) {
+            _validAnswersNormal.add(w['ingles'].toString().toLowerCase());
+          }
+        }
+      }
+    });
+  }
+
+  void _verifyAnswerNormal() async {
+    if (_currentWordNormal == null || _answerCtrl.text.isEmpty || _hasAnsweredNormal) return;
+
+    setState(() { _hasAnsweredNormal = true; });
+    final userAnswer = _answerCtrl.text.trim().toLowerCase();
+    bool acertou = _validAnswersNormal.contains(userAnswer);
+
+    setState(() {
+      if (acertou) {
+        _resultTextNormal = t('Resposta Correta! 🎉'); _resultColorNormal = Colors.green;
+      } else {
+        final displayCorrect = _validAnswersNormal.join(' ${t('ou')} ');
+        _resultTextNormal = '${t('Incorreta. O correto é:')} $displayCorrect'; _resultColorNormal = Colors.red;
+      }
+    });
+
+    _handleAnswer(acertou, _currentWordNormal!['ingles']);
+    await Future.delayed(const Duration(milliseconds: 2500));
+    if (mounted && _hasAnsweredNormal) { _drawWordNormal(); }
+  }
+
+  Future<void> _loadSettings() async {
+    final db = DatabaseHelper.instance;
+    setState(() {
+      db.getConfig('papagaio_filtro').then((v) { if (v.isNotEmpty) _parrotFilter = v; });
+      db.getConfig('papagaio_custom_val').then((v) { _parrotCustomVal = v; _parrotCustomCtrl.text = v; });
+      db.getConfig('papagaio_modo').then((v) { if (v.isNotEmpty) _parrotMode = v; });
+      db.getConfig('papagaio_vel').then((v) { if (v.isNotEmpty) _parrotSpeed = double.tryParse(v) ?? 1.0; });
+      db.getConfig('afiada_filtro').then((v) { if (v.isNotEmpty) _sharpFilter = v; });
+      db.getConfig('afiada_custom_val').then((v) { _sharpCustomVal = v; _sharpCustomCtrl.text = v; });
+    });
+  }
+
+  void _saveSettings() {
+    final db = DatabaseHelper.instance;
+    db.updateConfig('papagaio_filtro', _parrotFilter);
+    db.updateConfig('papagaio_custom_val', _parrotCustomVal);
+    db.updateConfig('papagaio_modo', _parrotMode);
+    db.updateConfig('papagaio_vel', _parrotSpeed.toString());
+    db.updateConfig('afiada_filtro', _sharpFilter);
+    db.updateConfig('afiada_custom_val', _sharpCustomVal);
+  }
+
+  void _stopParrot() {
+    _isParrotPlaying = false;
+    _flutterTts.stop();
+    _parrotStopwatch.stop();
+    int secs = _parrotStopwatch.elapsed.inSeconds;
+    if (secs > 0) DatabaseHelper.instance.registrarAtividade('tempo_papagaio', secs);
+    _parrotStopwatch.reset();
+  }
+
+  void _toggleParrot() async {
+    if (_isParrotPlaying) {
+      _stopParrot();
+      if (mounted) setState(() {});
+    } else {
+      if (mounted) setState(() => _isParrotPlaying = true);
+      _parrotStopwatch.start();
+      _runParrotLoop();
+    }
+  }
+
+  Future<void> _runParrotLoop() async {
+    try {
+      _flutterTts.awaitSpeakCompletion(true);
+      if (Platform.isIOS) _flutterTts.setIosAudioCategory(IosTextToSpeechAudioCategory.playback, [IosTextToSpeechAudioCategoryOptions.mixWithOthers, IosTextToSpeechAudioCategoryOptions.allowBluetooth]);
+
+      while (_isParrotPlaying) {
+        final rawWords = await DatabaseHelper.instance.fetchCustomWords(widget.currentLang, _parrotFilter, _parrotCustomVal);
+        if (rawWords.isEmpty) {
+          if (mounted) { ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t('Sua biblioteca está vazia!')), backgroundColor: Colors.orange)); setState(() { _stopParrot(); _parrotCurrentWordDisplay = t('Sua biblioteca está vazia!'); }); }
+          break;
+        }
+
+        final words = List<Map<String, dynamic>>.from(rawWords)..shuffle();
+
+        for (var word in words) {
+          if (!_isParrotPlaying) break;
+
+          if (mounted) setState(() => _parrotCurrentWordDisplay = word['ingles']);
+          AppLanguage studyLang = supportedLanguages[widget.currentLang]!;
+          await _flutterTts.setLanguage(studyLang.ttsCode); await _flutterTts.setSpeechRate(0.5 * _parrotSpeed); await _flutterTts.speak(word['ingles']);
+
+          if (!_isParrotPlaying) break; await Future.delayed(Duration(milliseconds: (1200 / _parrotSpeed).round()));
+          if (!_isParrotPlaying) break;
+
+          String trad = word['traducoes'].toString().replaceAll('|', ' ${t('ou')} ');
+          if (mounted) setState(() => _parrotCurrentWordDisplay = trad);
+          AppLanguage nativeLang = supportedLanguages[appNativeLanguage.value] ?? supportedLanguages['Português']!;
+          await _flutterTts.setLanguage(nativeLang.ttsCode); await _flutterTts.setSpeechRate(0.5 * _parrotSpeed); await _flutterTts.speak(trad);
+
+          if (!_isParrotPlaying) break; await Future.delayed(Duration(milliseconds: (2000 / _parrotSpeed).round()));
+        }
+        if (_parrotMode == 'single' && _isParrotPlaying) {
+          if (mounted) setState(() { _stopParrot(); _parrotCurrentWordDisplay = t('Sequência Concluída!'); });
+          break;
+        }
+      }
+    } catch (_) {
+      if (mounted) { setState(() => _stopParrot()); }
+    }
+  }
+
+  Future<void> _drawWordSharp() async {
+    final words = await DatabaseHelper.instance.fetchCustomWords(widget.currentLang, _sharpFilter, _sharpCustomVal);
+    if (words.isEmpty) { setState(() { _sharpResultText = t('Nenhuma palavra encontrada.'); _sharpResultColor = Colors.blue; }); return; }
+    setState(() {
+      _currentWordSharp = words[Random().nextInt(words.length)];
+      _sharpResultText = ''; _spokenText = ''; _hasAnsweredSharp = false; _sharpAnswerCtrl.clear();
+    });
+    _falar(_currentWordSharp!['ingles']);
+  }
+
+  void _listenSharp() async {
+    if (_hasAnsweredSharp) return;
+
+    if (!_isListening) {
+      bool available = await _speech.initialize(
+        onStatus: (val) { if (val == 'notListening' || val == 'done') setState(() => _isListening = false); },
+        onError: (_) { setState(() => _isListening = false); },
+      );
+      if (available) {
+        setState(() => _isListening = true);
+        AppLanguage langData = supportedLanguages[widget.currentLang]!;
+        _speech.listen(
+          onResult: (val) {
+            setState(() {
+              _spokenText = val.recognizedWords;
+              if (val.hasConfidenceRating && val.confidence > 0) _verifySpeech();
+            });
+          },
+          listenOptions: stt.SpeechListenOptions(localeId: langData.ttsCode),
+        );
+      } else {
+        setState(() => _isListening = false);
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t('Reconhecimento indisponível no telemóvel.'))));
+      }
+    } else {
+      setState(() => _isListening = false);
+      _speech.stop();
+      _verifySpeech();
+    }
+  }
+
+  void _verifySpeech() async {
+    if (_currentWordSharp == null || _spokenText.isEmpty || _hasAnsweredSharp) return;
+
+    setState(() { _hasAnsweredSharp = true; });
+    String target = _currentWordSharp!['ingles'].toString().toLowerCase().replaceAll(RegExp(r'[^\w\s]+'), '');
+    String spoken = _spokenText.toLowerCase().replaceAll(RegExp(r'[^\w\s]+'), '');
+
+    bool acertou = (spoken == target || spoken.contains(target) || target.contains(spoken));
+    setState(() {
+      if (acertou) {
+        _sharpResultText = t('Pronúncia Perfeita! 🎉'); _sharpResultColor = Colors.green;
+      } else {
+        _sharpResultText = '${t('Entendemos:')} "$spoken"'; _sharpResultColor = Colors.red;
+      }
+    });
+
+    _handleAnswer(acertou, _currentWordSharp!['ingles']);
+    await Future.delayed(const Duration(milliseconds: 2500));
+    if (mounted && _hasAnsweredSharp) { _drawWordSharp(); }
+  }
+
+  void _verifyAnswerSharpWriting() async {
+    if (_currentWordSharp == null || _sharpAnswerCtrl.text.isEmpty || _hasAnsweredSharp) return;
+
+    setState(() { _hasAnsweredSharp = true; });
+    String target = _currentWordSharp!['ingles'].toString().toLowerCase().trim();
+    String userAnswer = _sharpAnswerCtrl.text.toLowerCase().trim();
+
+    bool acertou = (target == userAnswer);
+    setState(() {
+      if (acertou) {
+        _sharpResultText = t('Escrita Perfeita! 🎉'); _sharpResultColor = Colors.green;
+      } else {
+        _sharpResultText = '${t('Incorreta. O correto é:')} $target'; _sharpResultColor = Colors.red;
+      }
+    });
+
+    _handleAnswer(acertou, _currentWordSharp!['ingles']);
+    await Future.delayed(const Duration(milliseconds: 2500));
+    if (mounted && _hasAnsweredSharp) { _drawWordSharp(); }
+  }
+
+  String _formatTime(int totalSeconds) {
+    if (totalSeconds < 60) return "${totalSeconds}s";
+    int m = totalSeconds ~/ 60;
+    if (m < 60) return "${m}m ${totalSeconds % 60}s";
+    int h = m ~/ 60;
+    return "${h}h ${m % 60}m";
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        PageView(
+          controller: _pageController,
+          scrollDirection: Axis.vertical,
+          children: [
+            _buildNormalPractice(),
+            _buildParrotPractice(),
+            _buildSharpPractice(),
+            _buildDesempenhoPractice(),
+          ],
+        ),
+
+        if (_showSpecialOverlay)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.85),
+                child: Center(
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween<double>(begin: 0.2, end: 1.0),
+                    duration: const Duration(milliseconds: 600),
+                    curve: Curves.elasticOut,
+                    builder: (context, scale, child) {
+                      return Transform.scale(
+                        scale: scale,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(t("Combos Especiais 🎉:").replaceAll(':', '!'), style: const TextStyle(fontSize: 32, color: Colors.orangeAccent, fontWeight: FontWeight.bold)),
+                            Text("+$_overlayPoints", style: const TextStyle(fontSize: 100, color: Colors.greenAccent, fontWeight: FontWeight.bold, shadows: [Shadow(color: Colors.black, blurRadius: 10)])),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+          )
+      ],
+    );
+  }
+
+  Widget _buildNormalPractice() {
+    return Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
+            child: Column(
+              children: [
+                _buildSmartTrainingToggle(),
+                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                  Row(
+                    children: [
+                      Text(t("Modo Clássico"), style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+                      IconButton(
+                        icon: const Icon(Icons.sync_alt, color: Colors.blue, size: 20),
+                        tooltip: t("Inverter Idioma"),
+                        onPressed: () {
+                          setState(() { _isReversedNormal = !_isReversedNormal; });
+                          _drawWordNormal();
+                        },
+                      ),
+                    ],
+                  ),
+                  Text("🔥 $_streak", style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 18)),
+                ]),
+                const SizedBox(height: 10),
+                FilledButton.icon(icon: const Icon(Icons.shuffle), label: Text(t('Sortear Palavra')), onPressed: _drawWordNormal),
+                const SizedBox(height: 30),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Flexible(child: Text(_questionToDisplay.isEmpty ? t('Clique acima para sortear') : _questionToDisplay, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold), textAlign: TextAlign.center)),
+                    if (_currentWordNormal != null && !_isReversedNormal)
+                      IconButton(icon: const Icon(Icons.volume_up, color: Colors.blue, size: 28), tooltip: t("Falar"), onPressed: () => _falar(_currentWordNormal!['ingles'])),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                TextField(
+                    controller: _answerCtrl,
+                    enabled: _currentWordNormal != null && !_hasAnsweredNormal,
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => _verifyAnswerNormal(),
+                    decoration: InputDecoration(
+                        labelText: _isReversedNormal ? "${t('Responder em')} ${t(widget.currentLang)}" : t('Sua Tradução'),
+                        border: const OutlineInputBorder()
+                    ),
+                    onChanged: (v) => setState((){})
+                ),
+                const SizedBox(height: 15),
+                ElevatedButton(
+                    onPressed: (_currentWordNormal == null || _answerCtrl.text.isEmpty || _hasAnsweredNormal) ? null : _verifyAnswerNormal,
+                    child: Text(t('Confirmar Resposta'))
+                ),
+                const SizedBox(height: 10),
+                Text(_resultTextNormal, style: TextStyle(fontSize: 18, color: _resultColorNormal, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+                const SizedBox(height: 10),
+                if (_resultTextNormal.isNotEmpty && _currentWordNormal?['imagem'] != null && _currentWordNormal!['imagem'] != '')
+                  Image.file(File(_currentWordNormal!['imagem']), height: 150, fit: BoxFit.contain)
+              ],
+            ),
+          ),
+        ),
+        _buildMinimalArrow(Icons.keyboard_arrow_up, t("Modo Papagaio"), () => _pageController.animateToPage(1, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut)),
+      ],
+    );
+  }
+
+  Widget _buildParrotPractice() {
+    return Column(
+      children: [
+        _buildMinimalArrow(Icons.keyboard_arrow_down, t("Modo Clássico"), () => _pageController.animateToPage(0, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut)),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20.0),
+            child: Column(
+              children: [
+                Row(mainAxisAlignment: MainAxisAlignment.center, children: [ const Text('🦜', style: TextStyle(fontSize: 30)), const SizedBox(width: 10), Text(t('Modo Papagaio'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)) ]),
+                const Divider(height: 15),
+
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        Opacity(
+                            opacity: _isParrotPlaying ? 0.5 : 1.0,
+                            child: IgnorePointer(
+                                ignoring: _isParrotPlaying,
+                                child: Column(
+                                  children: [
+                                    DropdownButtonFormField<String>(
+                                        key: ValueKey(_parrotFilter),
+                                        decoration: InputDecoration(labelText: t('Filtro de Palavras'), border: const OutlineInputBorder(), contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12)),
+                                        initialValue: _parrotFilter,
+                                        items: [ DropdownMenuItem(value: 'todas', child: Text(t("Todas as palavras salvas"))), DropdownMenuItem(value: '10', child: Text(t("Últimas 10 palavras"))), DropdownMenuItem(value: '20', child: Text(t("Últimas 20 palavras"))), DropdownMenuItem(value: '30', child: Text(t("Últimas 30 palavras"))), DropdownMenuItem(value: 'custom', child: Text(t("Quantidade Personalizada..."))) ],
+                                        onChanged: (v) { setState(() => _parrotFilter = v!); _saveSettings(); }
+                                    ),
+                                    if (_parrotFilter == 'custom') Padding(padding: const EdgeInsets.only(top: 10), child: TextField(controller: _parrotCustomCtrl, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: t('Nº Personalizado (> 0)'), border: const OutlineInputBorder(), isDense: true))),
+                                    const SizedBox(height: 12),
+                                    DropdownButtonFormField<double>(
+                                        key: ValueKey(_parrotSpeed),
+                                        decoration: InputDecoration(labelText: t('Velocidade da Voz'), border: const OutlineInputBorder(), contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12)),
+                                        initialValue: _parrotSpeed,
+                                        items: [ DropdownMenuItem(value: 0.5, child: Text(t('Lento (0.5x)'))), DropdownMenuItem(value: 1.0, child: Text(t('Normal (1x)'))), DropdownMenuItem(value: 1.5, child: Text(t('Rápido (1.5x)'))), DropdownMenuItem(value: 2.0, child: Text(t('Turbo (2x)'))) ],
+                                        onChanged: (v) { setState(() => _parrotSpeed = v!); _saveSettings(); }
+                                    ),
+                                    const SizedBox(height: 12),
+                                    DropdownButtonFormField<String>(
+                                        key: ValueKey(_parrotMode),
+                                        decoration: InputDecoration(labelText: t('Modo de Repetição'), border: const OutlineInputBorder(), contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12)),
+                                        initialValue: _parrotMode,
+                                        items: [ DropdownMenuItem(value: 'loop', child: Text("🔁 ${t('Em Loop (Sorteio Infinito)')}")), DropdownMenuItem(value: 'single', child: Text("➡️ ${t('1 Sequência (Parar no fim)')}")) ],
+                                        onChanged: (v) { setState(() => _parrotMode = v!); _saveSettings(); }
+                                    ),
+                                  ],
+                                )
+                            )
+                        ),
+                        const SizedBox(height: 25),
+                        Text(_parrotCurrentWordDisplay.isEmpty ? t('Pronto para voar!') : _parrotCurrentWordDisplay, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.green), textAlign: TextAlign.center),
+                        const SizedBox(height: 20),
+                      ],
+                    ),
+                  ),
+                ),
+
+                SizedBox(width: double.infinity, height: 55, child: FilledButton.icon(style: FilledButton.styleFrom(backgroundColor: _isParrotPlaying ? Colors.red.shade700 : Colors.green.shade700), onPressed: _toggleParrot, icon: Icon(_isParrotPlaying ? Icons.stop : Icons.play_arrow, size: 26), label: Text(_isParrotPlaying ? t("Parar Papagaio") : t("Iniciar Papagaio"), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)))),
+              ],
+            ),
+          ),
+        ),
+        _buildMinimalArrow(Icons.keyboard_arrow_up, t("Língua Afiada"), () => _pageController.animateToPage(2, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut)),
+      ],
+    );
+  }
+
+  Widget _buildSharpPractice() {
+    return Column(
+      children: [
+        _buildMinimalArrow(Icons.keyboard_arrow_down, t("Modo Papagaio"), () => _pageController.animateToPage(1, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut)),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 20.0),
+            child: Column(
+              children: [
+                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                  Row(
+                    children: [
+                      Text(_isSharpWriting ? t("Escrita Afiada") : t("Língua Afiada"), style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+                      IconButton(
+                        icon: const Icon(Icons.sync_alt, color: Colors.blue, size: 20),
+                        tooltip: t("Inverter Modo"),
+                        onPressed: () {
+                          setState(() { _isSharpWriting = !_isSharpWriting; });
+                          _drawWordSharp();
+                        },
+                      ),
+                    ],
+                  ),
+                  Text("🔥 $_streak", style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 18)),
+                ]),
+                Row(mainAxisAlignment: MainAxisAlignment.center, children: [ Text(_isSharpWriting ? '✍️' : '🗡️', style: const TextStyle(fontSize: 30)), const SizedBox(width: 10), Text(_isSharpWriting ? t('Escrita Afiada') : t('Língua Afiada'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)) ]),
+                const Divider(height: 15),
+
+                DropdownButtonFormField<String>(
+                    key: ValueKey(_sharpFilter),
+                    decoration: InputDecoration(labelText: t('Filtro de Sorteio (Global)'), border: const OutlineInputBorder(), contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12), isDense: true),
+                    initialValue: _sharpFilter,
+                    items: [ DropdownMenuItem(value: 'todas', child: Text(t("Todas as palavras"))), DropdownMenuItem(value: '10', child: Text(t("Últimas 10"))), DropdownMenuItem(value: '20', child: Text(t("Últimas 20"))), DropdownMenuItem(value: '30', child: Text(t("Últimas 30"))), DropdownMenuItem(value: 'custom', child: Text(t("Personalizado"))) ],
+                    onChanged: (v) { setState(() => _sharpFilter = v!); _saveSettings(); }
+                ),
+                if (_sharpFilter == 'custom')
+                  Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: TextField(controller: _sharpCustomCtrl, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: t('Nº Personalizado (> 0)'), border: const OutlineInputBorder(), isDense: true)),
+                  ),
+                const SizedBox(height: 20),
+
+                FilledButton.icon(icon: const Icon(Icons.shuffle), label: Text(t('Sortear Nova Palavra')), onPressed: _drawWordSharp),
+                const SizedBox(height: 30),
+
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Flexible(child: Text(_currentWordSharp?['ingles'] ?? t('Sorteie para começar'), style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: _isSharpWriting ? Colors.transparent : null), textAlign: TextAlign.center)),
+                    if (_currentWordSharp != null) IconButton(icon: const Icon(Icons.volume_up, color: Colors.blue, size: 45), tooltip: t("Falar"), onPressed: () => _falar(_currentWordSharp!['ingles'])),
+                  ],
+                ),
+
+                if (_currentWordSharp != null) ...[
+                  const SizedBox(height: 10),
+                  Text(_currentWordSharp!['traducoes'].toString().replaceAll('|', ' ${t('ou')} '), style: const TextStyle(fontSize: 16, color: Colors.grey)),
+                ],
+
+                const SizedBox(height: 30),
+                Text(_sharpResultText, style: TextStyle(fontSize: 18, color: _sharpResultColor, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+                const SizedBox(height: 20),
+
+                if (!_isSharpWriting) ...[
+                  GestureDetector(
+                    onTap: (_currentWordSharp == null || _hasAnsweredSharp) ? null : _listenSharp,
+                    child: CircleAvatar(
+                      radius: 35,
+                      backgroundColor: (_currentWordSharp == null || _hasAnsweredSharp) ? Colors.grey.shade300 : (_isListening ? Colors.red : Colors.blue),
+                      child: Icon(_isListening ? Icons.mic : Icons.mic_none, size: 35, color: Colors.white),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(_isListening ? t("A escutar... Fale agora!") : (_currentWordSharp == null ? "" : t("Toque para falar")), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                  const SizedBox(height: 20),
+                ] else ...[
+                  TextField(
+                      controller: _sharpAnswerCtrl,
+                      enabled: _currentWordSharp != null && !_hasAnsweredSharp,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _verifyAnswerSharpWriting(),
+                      decoration: InputDecoration(
+                          labelText: t('Digite o que ouviu'),
+                          border: const OutlineInputBorder()
+                      ),
+                      onChanged: (v) => setState((){})
+                  ),
+                  const SizedBox(height: 15),
+                  ElevatedButton(
+                      onPressed: (_currentWordSharp == null || _sharpAnswerCtrl.text.isEmpty || _hasAnsweredSharp) ? null : _verifyAnswerSharpWriting,
+                      child: Text(t('Confirmar Resposta'))
+                  ),
+                ]
+              ],
+            ),
+          ),
+        ),
+        _buildMinimalArrow(Icons.keyboard_arrow_up, t("Desempenho"), () => _pageController.animateToPage(3, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut)),
+      ],
+    );
+  }
+
+  Widget _buildDesempenhoPractice() {
+    return Column(
+      children: [
+        _buildMinimalArrow(Icons.keyboard_arrow_down, t("Língua Afiada"), () => _pageController.animateToPage(2, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut)),
+        Expanded(
+          child: FutureBuilder(
+            future: Future.wait([ DatabaseHelper.instance.getEstatisticasHoje(), DatabaseHelper.instance.getEstatisticasSemana(), DatabaseHelper.instance.getHistoricoMensal() ]),
+            builder: (context, AsyncSnapshot<List<dynamic>> snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+              if (snapshot.hasError || !snapshot.hasData || snapshot.data == null) return Center(child: Text(t("Nenhuma atividade."), style: const TextStyle(color: Colors.grey)));
+
+              final hoje = snapshot.data![0] as Map<String, dynamic>? ?? {};
+              final semana = snapshot.data![1] as Map<String, dynamic>? ?? {};
+              final meses = snapshot.data![2] as List<Map<String, dynamic>>? ?? [];
+
+              return SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                child: Column(
+                  children: [
+                    Row(mainAxisAlignment: MainAxisAlignment.center, children: [ const Text('📈', style: TextStyle(fontSize: 30)), const SizedBox(width: 10), Text(t('Seu Desempenho'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)) ]),
+                    const Divider(height: 15),
+
+                    Card(
+                      elevation: 3,
+                      child: Padding(
+                        padding: const EdgeInsets.all(15.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(t("Desempenho de Hoje"), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blue)),
+                            const SizedBox(height: 10),
+                            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(t("Perguntas Respondidas:")), Text("${hoje['respondidas'] ?? 0}", style: const TextStyle(fontWeight: FontWeight.bold))]),
+                            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(t("Acertos / Erros:")), Text("${hoje['acertos'] ?? 0} / ${hoje['erros'] ?? 0}", style: const TextStyle(fontWeight: FontWeight.bold))]),
+                            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(t("Combos Especiais 🎉:")), Text("${hoje['especiais'] ?? 0}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green))]),
+                            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(t("Tempo no Papagaio 🦜:")), Text(_formatTime(hoje['tempo_papagaio'] ?? 0), style: const TextStyle(fontWeight: FontWeight.bold))]),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 15),
+
+                    Card(
+                      elevation: 3,
+                      child: Padding(
+                        padding: const EdgeInsets.all(15.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(t("Últimos 7 Dias"), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.purple)),
+                            const SizedBox(height: 10),
+                            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(t("Perguntas Respondidas:")), Text("${semana['respondidas'] ?? 0}", style: const TextStyle(fontWeight: FontWeight.bold))]),
+                            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(t("Acertos / Erros:")), Text("${semana['acertos'] ?? 0} / ${semana['erros'] ?? 0}", style: const TextStyle(fontWeight: FontWeight.bold))]),
+                            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(t("Combos Especiais 🎉:")), Text("${semana['especiais'] ?? 0}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green))]),
+                            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text(t("Tempo no Papagaio 🦜:")), Text(_formatTime(semana['tempo_papagaio'] ?? 0), style: const TextStyle(fontWeight: FontWeight.bold))]),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 15),
+
+                    Align(alignment: Alignment.centerLeft, child: Text(" ${t('Histórico Mensal')}", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+                    const SizedBox(height: 10),
+                    meses.isEmpty
+                        ? Text(t("Nenhum dado mensal."), style: const TextStyle(color: Colors.grey))
+                        : ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: meses.length,
+                      itemBuilder: (context, index) {
+                        final mes = meses[index];
+                        return Card(
+                          child: ListTile(
+                            leading: const Icon(Icons.calendar_month, color: Colors.grey),
+                            title: Text(mes['mes'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
+                            subtitle: Text("${t('Perguntas Respondidas:')} ${mes['respondidas'] ?? 0} | ${t('Acertos / Erros:')} ${mes['acertos'] ?? 0}\n${t('Combos Especiais 🎉:')} ${mes['especiais'] ?? 0} | ${t('Tempo no Papagaio 🦜:')} ${_formatTime(mes['tempo_papagaio'] ?? 0)}"),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
