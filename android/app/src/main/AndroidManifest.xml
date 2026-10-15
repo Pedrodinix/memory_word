@@ -5,8 +5,9 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
-    <!-- Declaração de hardware opcional para evitar o aviso da câmara -->
+    <!-- Declaração de hardware opcional para evitar avisos na Play Console -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
     <!-- Agrupamento correto das Queries -->
     <queries>
@@ -24,6 +25,7 @@
 
     <application
         android:label="Memory Word"
+        android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon">
         <activity
             android:name=".MainActivity"
