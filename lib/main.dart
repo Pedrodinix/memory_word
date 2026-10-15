@@ -297,7 +297,7 @@ String t(String text) {
     },
 
     // --- TELA DE REGISTRO ---
-    'Registar Palavra': {
+    'Registrar Palavra': {
       'en': 'Register Word', 'de': 'Wort registrieren', 'es': 'Registrar Palabra', 'fr': 'Enregistrer le mot',
       'it': 'Registra Parola', 'ru': 'Добавить слово', 'ja': '単語を登録', 'zh-cn': '添加单词',
       'ko': '단어 등록', 'hi': 'शब्द दर्ज करें', 'ar': 'تسجيل كلمة'
