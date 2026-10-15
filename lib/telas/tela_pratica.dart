@@ -33,17 +33,18 @@ class _PracticeTabState extends State<PracticeTab> {
   bool _showSpecialOverlay = false;
   int _overlayPoints = 0;
 
+  // --- MODO CLÁSSICO ---
   Map<String, dynamic>? _currentWordNormal;
   final _answerCtrl = TextEditingController();
   String _resultTextNormal = '';
   Color _resultColorNormal = Colors.black;
   bool _hasAnsweredNormal = false;
-
   bool _isReversedNormal = false;
   List<Map<String, dynamic>> _allFetchedWordsNormal = [];
   String _questionToDisplay = '';
   List<String> _validAnswersNormal = [];
 
+  // --- MODO PAPAGAIO ---
   String _parrotFilter = 'todas';
   String _parrotCustomVal = '';
   String _parrotMode = 'loop';
@@ -52,6 +53,7 @@ class _PracticeTabState extends State<PracticeTab> {
   bool _isParrotPlaying = false;
   String _parrotCurrentWordDisplay = '';
 
+  // --- MODO LÍNGUA AFIADA / ESCRITA AFIADA (Apenas Idiomas) ---
   Map<String, dynamic>? _currentWordSharp;
   String _sharpFilter = 'todas';
   String _sharpCustomVal = '';
@@ -61,9 +63,21 @@ class _PracticeTabState extends State<PracticeTab> {
   String _sharpResultText = '';
   Color _sharpResultColor = Colors.black;
   bool _hasAnsweredSharp = false;
-
   bool _isSharpWriting = false;
   final _sharpAnswerCtrl = TextEditingController();
+
+  // --- MODO DESAFIO VISUAL (Sorteio de Imagem - Idiomas e Estudo Livre) ---
+  Map<String, dynamic>? _currentWordImage;
+  final _imageAnswerCtrl = TextEditingController();
+  String _imageResultText = '';
+  Color _imageResultColor = Colors.black;
+  bool _hasAnsweredImage = false;
+  // No Estudo Livre, define se o usuário quer digitar o Objeto (false) ou a Explicação (true)
+  bool _imageAskExplanationInFreeMode = false;
+  List<String> _validAnswersImage = [];
+
+  bool get _isFreeStudy => isCustomStudy(widget.currentLang);
+  String get _displayTopic => getStudyDisplayName(widget.currentLang);
 
   @override
   void initState() {
@@ -94,13 +108,24 @@ class _PracticeTabState extends State<PracticeTab> {
       _resultTextNormal = '';
       _hasAnsweredNormal = false;
       _questionToDisplay = '';
+
       _currentWordSharp = null;
       _sharpResultText = '';
       _spokenText = '';
       _hasAnsweredSharp = false;
       _sharpAnswerCtrl.clear();
+
+      _currentWordImage = null;
+      _imageAnswerCtrl.clear();
+      _imageResultText = '';
+      _hasAnsweredImage = false;
+
       _streak = 0;
       _nextMilestone = 10;
+
+      if (_pageController.hasClients) {
+        _pageController.jumpToPage(0);
+      }
     }
   }
 
@@ -116,6 +141,7 @@ class _PracticeTabState extends State<PracticeTab> {
     _sharpCustomCtrl.dispose();
     _answerCtrl.dispose();
     _sharpAnswerCtrl.dispose();
+    _imageAnswerCtrl.dispose();
     super.dispose();
   }
 
@@ -177,8 +203,10 @@ class _PracticeTabState extends State<PracticeTab> {
     });
   }
 
-  Future<void> _falar(String texto, {double rate = 0.5}) async {
-    AppLanguage langData = supportedLanguages[widget.currentLang]!;
+  Future<void> _falar(String texto, {double rate = 0.5, bool forceNative = false}) async {
+    AppLanguage langData = (_isFreeStudy || forceNative)
+        ? (supportedLanguages[appNativeLanguage.value] ?? supportedLanguages['Português']!)
+        : (supportedLanguages[widget.currentLang] ?? supportedLanguages['Inglês']!);
     await _flutterTts.setLanguage(langData.ttsCode);
     await _flutterTts.setSpeechRate(rate);
     await _flutterTts.speak(texto);
@@ -218,14 +246,14 @@ class _PracticeTabState extends State<PracticeTab> {
           child: SwitchListTile(
             secondary: const Text('🧠', style: TextStyle(fontSize: 24)),
             title: Text(t("Treino Inteligente"), style: const TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: Text(t("Priorizar as palavras que você mais erra"), style: const TextStyle(fontSize: 12)),
+            subtitle: Text(t("Priorizar os itens que você mais erra"), style: const TextStyle(fontSize: 12)),
             value: isSmart,
             onChanged: (val) {
               appTreinoInteligente.value = val;
               DatabaseHelper.instance.updateConfig('treino_inteligente', val.toString());
               if (!_isParrotPlaying && !_isListening) {
-                if (_pageController.page == 0) _drawWordNormal();
-                if (_pageController.page == 2) _drawWordSharp();
+                final page = _pageController.hasClients ? (_pageController.page?.round() ?? 0) : 0;
+                if (page == 0) _drawWordNormal();
               }
             },
           ),
@@ -234,6 +262,9 @@ class _PracticeTabState extends State<PracticeTab> {
     );
   }
 
+  // ==========================================
+  // LÓGICA: MODO CLÁSSICO
+  // ==========================================
   Future<void> _drawWordNormal() async {
     final db = DatabaseHelper.instance;
     final filtroGlobal = await db.getConfig('filtro');
@@ -282,7 +313,7 @@ class _PracticeTabState extends State<PracticeTab> {
   }
 
   void _verifyAnswerNormal() async {
-    if (_currentWordNormal == null || _answerCtrl.text.isEmpty || _hasAnsweredNormal) return;
+    if (_currentWordNormal == null || _answerCtrl.text.trim().isEmpty || _hasAnsweredNormal) return;
 
     setState(() {
       _hasAnsweredNormal = true;
@@ -302,12 +333,18 @@ class _PracticeTabState extends State<PracticeTab> {
     });
 
     _handleAnswer(acertou, _currentWordNormal!['ingles']);
-    await Future.delayed(const Duration(milliseconds: 2500));
-    if (mounted && _hasAnsweredNormal) {
-      _drawWordNormal();
+
+    if (appAutoNext.value) {
+      await Future.delayed(const Duration(milliseconds: 2500));
+      if (mounted && _hasAnsweredNormal) {
+        _drawWordNormal();
+      }
     }
   }
 
+  // ==========================================
+  // LÓGICA: CONFIGURAÇÕES E MODO PAPAGAIO
+  // ==========================================
   Future<void> _loadSettings() async {
     final db = DatabaseHelper.instance;
     final pFiltro = await db.getConfig('papagaio_filtro');
@@ -371,7 +408,11 @@ class _PracticeTabState extends State<PracticeTab> {
       }
 
       while (_isParrotPlaying) {
-        final rawWords = await DatabaseHelper.instance.fetchCustomWords(widget.currentLang, _parrotFilter, _parrotCustomVal);
+        final rawWords = await DatabaseHelper.instance.fetchCustomWords(
+          widget.currentLang,
+          _parrotFilter,
+          _parrotCustomVal,
+        );
         if (rawWords.isEmpty) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -386,12 +427,15 @@ class _PracticeTabState extends State<PracticeTab> {
         }
 
         final words = List<Map<String, dynamic>>.from(rawWords)..shuffle();
+        AppLanguage nativeLang = supportedLanguages[appNativeLanguage.value] ?? supportedLanguages['Português']!;
+        AppLanguage studyLang = _isFreeStudy
+            ? nativeLang
+            : (supportedLanguages[widget.currentLang] ?? supportedLanguages['Inglês']!);
 
         for (var word in words) {
           if (!_isParrotPlaying) break;
 
           if (mounted) setState(() => _parrotCurrentWordDisplay = word['ingles']);
-          AppLanguage studyLang = supportedLanguages[widget.currentLang]!;
           await _flutterTts.setLanguage(studyLang.ttsCode);
           await _flutterTts.setSpeechRate(0.5 * _parrotSpeed);
           await _flutterTts.speak(word['ingles']);
@@ -402,7 +446,6 @@ class _PracticeTabState extends State<PracticeTab> {
 
           String trad = word['traducoes'].toString().replaceAll('|', ' ${t('ou')} ');
           if (mounted) setState(() => _parrotCurrentWordDisplay = trad);
-          AppLanguage nativeLang = supportedLanguages[appNativeLanguage.value] ?? supportedLanguages['Português']!;
           await _flutterTts.setLanguage(nativeLang.ttsCode);
           await _flutterTts.setSpeechRate(0.5 * _parrotSpeed);
           await _flutterTts.speak(trad);
@@ -427,6 +470,9 @@ class _PracticeTabState extends State<PracticeTab> {
     }
   }
 
+  // ==========================================
+  // LÓGICA: LÍNGUA AFIADA E ESCRITA AFIADA
+  // ==========================================
   Future<void> _drawWordSharp() async {
     final words = await DatabaseHelper.instance.fetchCustomWords(widget.currentLang, _sharpFilter, _sharpCustomVal);
     if (!mounted) return;
@@ -463,7 +509,7 @@ class _PracticeTabState extends State<PracticeTab> {
       );
       if (available) {
         setState(() => _isListening = true);
-        AppLanguage langData = supportedLanguages[widget.currentLang]!;
+        AppLanguage langData = supportedLanguages[widget.currentLang] ?? supportedLanguages['Inglês']!;
         _speech.listen(
           onResult: (val) {
             setState(() {
@@ -494,8 +540,8 @@ class _PracticeTabState extends State<PracticeTab> {
     setState(() {
       _hasAnsweredSharp = true;
     });
-    String target = _currentWordSharp!['ingles'].toString().toLowerCase().replaceAll(RegExp(r'[^\w\s]+'), '');
-    String spoken = _spokenText.toLowerCase().replaceAll(RegExp(r'[^\w\s]+'), '');
+    String target = _currentWordSharp!['ingles'].toString().toLowerCase().trim();
+    String spoken = _spokenText.toLowerCase().trim();
 
     bool acertou = (spoken == target || spoken.contains(target) || target.contains(spoken));
     setState(() {
@@ -509,14 +555,16 @@ class _PracticeTabState extends State<PracticeTab> {
     });
 
     _handleAnswer(acertou, _currentWordSharp!['ingles']);
-    await Future.delayed(const Duration(milliseconds: 2500));
-    if (mounted && _hasAnsweredSharp) {
-      _drawWordSharp();
+    if (appAutoNext.value) {
+      await Future.delayed(const Duration(milliseconds: 2500));
+      if (mounted && _hasAnsweredSharp) {
+        _drawWordSharp();
+      }
     }
   }
 
   void _verifyAnswerSharpWriting() async {
-    if (_currentWordSharp == null || _sharpAnswerCtrl.text.isEmpty || _hasAnsweredSharp) return;
+    if (_currentWordSharp == null || _sharpAnswerCtrl.text.trim().isEmpty || _hasAnsweredSharp) return;
 
     setState(() {
       _hasAnsweredSharp = true;
@@ -536,9 +584,102 @@ class _PracticeTabState extends State<PracticeTab> {
     });
 
     _handleAnswer(acertou, _currentWordSharp!['ingles']);
-    await Future.delayed(const Duration(milliseconds: 2500));
-    if (mounted && _hasAnsweredSharp) {
-      _drawWordSharp();
+    if (appAutoNext.value) {
+      await Future.delayed(const Duration(milliseconds: 2500));
+      if (mounted && _hasAnsweredSharp) {
+        _drawWordSharp();
+      }
+    }
+  }
+
+  // ==========================================
+  // LÓGICA: DESAFIO VISUAL (SORTEIO DE IMAGEM)
+  // ==========================================
+  Future<void> _drawWordImage() async {
+    final db = DatabaseHelper.instance;
+    final filtroGlobal = await db.getConfig('filtro');
+    final customGlobal = await db.getConfig('custom_val');
+    final allWords = await db.fetchCustomWords(
+      widget.currentLang,
+      filtroGlobal.isEmpty ? 'todas' : filtroGlobal,
+      customGlobal,
+    );
+
+    // Filtra apenas itens que possuem arquivo de imagem válido salvo no dispositivo
+    final wordsWithImages = allWords.where((w) {
+      final p = w['imagem']?.toString() ?? '';
+      return p.isNotEmpty && File(p).existsSync();
+    }).toList();
+
+    if (!mounted) return;
+    if (wordsWithImages.isEmpty) {
+      setState(() {
+        _currentWordImage = null;
+        _imageResultText = t(
+          'Nenhum item com imagem encontrado nesta biblioteca! Adicione fotos aos seus registos para usar este modo.',
+        );
+        _imageResultColor = Colors.orange.shade800;
+      });
+      return;
+    }
+
+    setState(() {
+      _currentWordImage = wordsWithImages[Random().nextInt(wordsWithImages.length)];
+      _imageAnswerCtrl.clear();
+      _imageResultText = '';
+      _hasAnsweredImage = false;
+      _updateValidImageAnswers();
+    });
+  }
+
+  void _updateValidImageAnswers() {
+    if (_currentWordImage == null) return;
+    if (!_isFreeStudy) {
+      // No modo de Idiomas, o usuário vê a imagem e responde a palavra no idioma de estudo
+      _validAnswersImage = [_currentWordImage!['ingles'].toString().trim().toLowerCase()];
+    } else {
+      // No modo de Estudo Livre, responde o Objeto de Estudo ou a Explicação conforme o seletor
+      if (!_imageAskExplanationInFreeMode) {
+        _validAnswersImage = [_currentWordImage!['ingles'].toString().trim().toLowerCase()];
+      } else {
+        _validAnswersImage = _currentWordImage!['traducoes']
+            .toString()
+            .split('|')
+            .map((e) => e.trim().toLowerCase())
+            .toList();
+      }
+    }
+  }
+
+  void _verifyAnswerImage() async {
+    if (_currentWordImage == null || _imageAnswerCtrl.text.trim().isEmpty || _hasAnsweredImage) return;
+
+    setState(() {
+      _hasAnsweredImage = true;
+    });
+
+    final userAnswer = _imageAnswerCtrl.text.trim().toLowerCase();
+    bool acertou = _validAnswersImage.contains(userAnswer);
+
+    // No Estudo Livre, se o usuário digitou exatamente a explicação ou o objeto, também mostramos feedback claro
+    setState(() {
+      if (acertou) {
+        _imageResultText = t('Resposta Correta! 🎉');
+        _imageResultColor = Colors.green;
+      } else {
+        final displayCorrect = _validAnswersImage.join(' ${t('ou')} ');
+        _imageResultText = '${t('Incorreta. O correto é:')} $displayCorrect';
+        _imageResultColor = Colors.red;
+      }
+    });
+
+    _handleAnswer(acertou, _currentWordImage!['ingles']);
+
+    if (appAutoNext.value) {
+      await Future.delayed(const Duration(milliseconds: 2500));
+      if (mounted && _hasAnsweredImage) {
+        _drawWordImage();
+      }
     }
   }
 
@@ -552,17 +693,27 @@ class _PracticeTabState extends State<PracticeTab> {
 
   @override
   Widget build(BuildContext context) {
+    final pages = _isFreeStudy
+        ? [
+      _buildNormalPractice(),
+      _buildParrotPractice(),
+      _buildImagePractice(),
+      _buildDesempenhoPractice(),
+    ]
+        : [
+      _buildNormalPractice(),
+      _buildParrotPractice(),
+      _buildSharpPractice(),
+      _buildImagePractice(),
+      _buildDesempenhoPractice(),
+    ];
+
     return Stack(
       children: [
         PageView(
           controller: _pageController,
           scrollDirection: Axis.vertical,
-          children: [
-            _buildNormalPractice(),
-            _buildParrotPractice(),
-            _buildSharpPractice(),
-            _buildDesempenhoPractice(),
-          ],
+          children: pages,
         ),
         if (_showSpecialOverlay)
           Positioned.fill(
@@ -582,7 +733,11 @@ class _PracticeTabState extends State<PracticeTab> {
                           children: [
                             Text(
                               t("Combos Especiais 🎉:").replaceAll(':', '!'),
-                              style: const TextStyle(fontSize: 32, color: Colors.orangeAccent, fontWeight: FontWeight.bold),
+                              style: const TextStyle(
+                                fontSize: 32,
+                                color: Colors.orangeAccent,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                             Text(
                               "+$_overlayPoints",
@@ -606,9 +761,19 @@ class _PracticeTabState extends State<PracticeTab> {
     );
   }
 
+  // ==========================================
+  // UI: 1. MODO CLÁSSICO
+  // ==========================================
   Widget _buildNormalPractice() {
     final imgPath = _currentWordNormal?['imagem']?.toString() ?? '';
     final hasValidImage = imgPath.isNotEmpty && File(imgPath).existsSync();
+
+    String inputLabel;
+    if (_isFreeStudy) {
+      inputLabel = _isReversedNormal ? t('Qual é o Objeto de Estudo?') : t('Sua Explicação');
+    } else {
+      inputLabel = _isReversedNormal ? "${t('Responder em')} $_displayTopic" : t('Sua Tradução');
+    }
 
     return Column(
       children: [
@@ -623,10 +788,13 @@ class _PracticeTabState extends State<PracticeTab> {
                   children: [
                     Row(
                       children: [
-                        Text(t("Modo Clássico"), style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+                        Text(
+                          t("Modo Clássico"),
+                          style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
+                        ),
                         IconButton(
                           icon: const Icon(Icons.sync_alt, color: Colors.blue, size: 20),
-                          tooltip: t("Inverter Idioma"),
+                          tooltip: t("Inverter"),
                           onPressed: () {
                             setState(() {
                               _isReversedNormal = !_isReversedNormal;
@@ -636,11 +804,18 @@ class _PracticeTabState extends State<PracticeTab> {
                         ),
                       ],
                     ),
-                    Text("🔥 $_streak", style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 18)),
+                    Text(
+                      "🔥 $_streak",
+                      style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 18),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 10),
-                FilledButton.icon(icon: const Icon(Icons.shuffle), label: Text(t('Sortear Palavra')), onPressed: _drawWordNormal),
+                FilledButton.icon(
+                  icon: const Icon(Icons.shuffle),
+                  label: Text(_isFreeStudy ? t('Sortear Objeto de Estudo') : t('Sortear Palavra')),
+                  onPressed: _drawWordNormal,
+                ),
                 const SizedBox(height: 30),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -652,11 +827,14 @@ class _PracticeTabState extends State<PracticeTab> {
                         textAlign: TextAlign.center,
                       ),
                     ),
-                    if (_currentWordNormal != null && !_isReversedNormal)
+                    if (_currentWordNormal != null)
                       IconButton(
                         icon: const Icon(Icons.volume_up, color: Colors.blue, size: 28),
                         tooltip: t("Falar"),
-                        onPressed: () => _falar(_currentWordNormal!['ingles']),
+                        onPressed: () => _falar(
+                          _questionToDisplay,
+                          forceNative: _isFreeStudy || _isReversedNormal,
+                        ),
                       ),
                   ],
                 ),
@@ -667,15 +845,30 @@ class _PracticeTabState extends State<PracticeTab> {
                   textInputAction: TextInputAction.done,
                   onSubmitted: (_) => _verifyAnswerNormal(),
                   decoration: InputDecoration(
-                    labelText: _isReversedNormal ? "${t('Responder em')} ${t(widget.currentLang)}" : t('Sua Tradução'),
+                    labelText: inputLabel,
                     border: const OutlineInputBorder(),
                   ),
                   onChanged: (v) => setState(() {}),
                 ),
                 const SizedBox(height: 15),
-                ElevatedButton(
-                  onPressed: (_currentWordNormal == null || _answerCtrl.text.isEmpty || _hasAnsweredNormal) ? null : _verifyAnswerNormal,
-                  child: Text(t('Confirmar Resposta')),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    ElevatedButton(
+                      onPressed: (_currentWordNormal == null || _answerCtrl.text.trim().isEmpty || _hasAnsweredNormal)
+                          ? null
+                          : _verifyAnswerNormal,
+                      child: Text(t('Confirmar Resposta')),
+                    ),
+                    if (_hasAnsweredNormal && !appAutoNext.value) ...[
+                      const SizedBox(width: 12),
+                      FilledButton.tonalIcon(
+                        icon: const Icon(Icons.arrow_forward),
+                        label: Text(t('Próximo')),
+                        onPressed: _drawWordNormal,
+                      ),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 10),
                 Text(
@@ -685,7 +878,10 @@ class _PracticeTabState extends State<PracticeTab> {
                 ),
                 const SizedBox(height: 10),
                 if (_resultTextNormal.isNotEmpty && hasValidImage)
-                  Image.file(File(imgPath), height: 150, fit: BoxFit.contain),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.file(File(imgPath), height: 160, fit: BoxFit.contain),
+                  ),
               ],
             ),
           ),
@@ -699,7 +895,12 @@ class _PracticeTabState extends State<PracticeTab> {
     );
   }
 
+  // ==========================================
+  // UI: 2. MODO PAPAGAIO
+  // ==========================================
   Widget _buildParrotPractice() {
+    final nextTitle = _isFreeStudy ? t("Desafio Visual") : t("Língua Afiada");
+
     return Column(
       children: [
         _buildMinimalArrow(
@@ -740,11 +941,11 @@ class _PracticeTabState extends State<PracticeTab> {
                                   ),
                                   initialValue: _parrotFilter,
                                   items: [
-                                    DropdownMenuItem(value: 'todas', child: Text(t("Todas as palavras salvas"))),
-                                    DropdownMenuItem(value: '10', child: Text(t("Últimas 10 palavras"))),
-                                    DropdownMenuItem(value: '20', child: Text(t("Últimas 20 palavras"))),
-                                    DropdownMenuItem(value: '30', child: Text(t("Últimas 30 palavras"))),
-                                    DropdownMenuItem(value: 'custom', child: Text(t("Quantidade Personalizada..."))),
+                                    DropdownMenuItem(value: 'todas', child: Text(t("Todas as palavras"))),
+                                    DropdownMenuItem(value: '10', child: Text(t("Últimas 10"))),
+                                    DropdownMenuItem(value: '20', child: Text(t("Últimas 20"))),
+                                    DropdownMenuItem(value: '30', child: Text(t("Últimas 30"))),
+                                    DropdownMenuItem(value: 'custom', child: Text(t("Personalizado"))),
                                   ],
                                   onChanged: (v) {
                                     setState(() => _parrotFilter = v!);
@@ -809,7 +1010,7 @@ class _PracticeTabState extends State<PracticeTab> {
                         const SizedBox(height: 25),
                         Text(
                           _parrotCurrentWordDisplay.isEmpty ? t('Pronto para voar!') : _parrotCurrentWordDisplay,
-                          style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.green),
+                          style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.green),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 20),
@@ -821,7 +1022,9 @@ class _PracticeTabState extends State<PracticeTab> {
                   width: double.infinity,
                   height: 55,
                   child: FilledButton.icon(
-                    style: FilledButton.styleFrom(backgroundColor: _isParrotPlaying ? Colors.red.shade700 : Colors.green.shade700),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: _isParrotPlaying ? Colors.red.shade700 : Colors.green.shade700,
+                    ),
                     onPressed: _toggleParrot,
                     icon: Icon(_isParrotPlaying ? Icons.stop : Icons.play_arrow, size: 26),
                     label: Text(
@@ -836,13 +1039,16 @@ class _PracticeTabState extends State<PracticeTab> {
         ),
         _buildMinimalArrow(
           Icons.keyboard_arrow_up,
-          t("Língua Afiada"),
+          nextTitle,
               () => _pageController.animateToPage(2, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut),
         ),
       ],
     );
   }
 
+  // ==========================================
+  // UI: 3. LÍNGUA AFIADA / ESCRITA AFIADA (Apenas Idiomas)
+  // ==========================================
   Widget _buildSharpPractice() {
     return Column(
       children: [
@@ -877,7 +1083,10 @@ class _PracticeTabState extends State<PracticeTab> {
                         ),
                       ],
                     ),
-                    Text("🔥 $_streak", style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 18)),
+                    Text(
+                      "🔥 $_streak",
+                      style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 18),
+                    ),
                   ],
                 ),
                 Row(
@@ -927,7 +1136,11 @@ class _PracticeTabState extends State<PracticeTab> {
                     ),
                   ),
                 const SizedBox(height: 20),
-                FilledButton.icon(icon: const Icon(Icons.shuffle), label: Text(t('Sortear Nova Palavra')), onPressed: _drawWordSharp),
+                FilledButton.icon(
+                  icon: const Icon(Icons.shuffle),
+                  label: Text(t('Sortear Nova Palavra')),
+                  onPressed: _drawWordSharp,
+                ),
                 const SizedBox(height: 30),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -956,6 +1169,7 @@ class _PracticeTabState extends State<PracticeTab> {
                   Text(
                     _currentWordSharp!['traducoes'].toString().replaceAll('|', ' ${t('ou')} '),
                     style: const TextStyle(fontSize: 16, color: Colors.grey),
+                    textAlign: TextAlign.center,
                   ),
                 ],
                 const SizedBox(height: 30),
@@ -981,6 +1195,14 @@ class _PracticeTabState extends State<PracticeTab> {
                     _isListening ? t("A escutar... Fale agora!") : (_currentWordSharp == null ? "" : t("Toque para falar")),
                     style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                   ),
+                  if (_hasAnsweredSharp && !appAutoNext.value) ...[
+                    const SizedBox(height: 15),
+                    FilledButton.tonalIcon(
+                      icon: const Icon(Icons.arrow_forward),
+                      label: Text(t('Próximo')),
+                      onPressed: _drawWordSharp,
+                    ),
+                  ],
                   const SizedBox(height: 20),
                 ] else ...[
                   TextField(
@@ -995,11 +1217,198 @@ class _PracticeTabState extends State<PracticeTab> {
                     onChanged: (v) => setState(() {}),
                   ),
                   const SizedBox(height: 15),
-                  ElevatedButton(
-                    onPressed: (_currentWordSharp == null || _sharpAnswerCtrl.text.isEmpty || _hasAnsweredSharp)
-                        ? null
-                        : _verifyAnswerSharpWriting,
-                    child: Text(t('Confirmar Resposta')),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      ElevatedButton(
+                        onPressed: (_currentWordSharp == null || _sharpAnswerCtrl.text.trim().isEmpty || _hasAnsweredSharp)
+                            ? null
+                            : _verifyAnswerSharpWriting,
+                        child: Text(t('Confirmar Resposta')),
+                      ),
+                      if (_hasAnsweredSharp && !appAutoNext.value) ...[
+                        const SizedBox(width: 12),
+                        FilledButton.tonalIcon(
+                          icon: const Icon(Icons.arrow_forward),
+                          label: Text(t('Próximo')),
+                          onPressed: _drawWordSharp,
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+        _buildMinimalArrow(
+          Icons.keyboard_arrow_up,
+          t("Desafio Visual"),
+              () => _pageController.animateToPage(3, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut),
+        ),
+      ],
+    );
+  }
+
+  // ==========================================
+  // UI: 4. DESAFIO VISUAL (SORTEIO DE IMAGEM)
+  // ==========================================
+  Widget _buildImagePractice() {
+    final int prevPageIndex = _isFreeStudy ? 1 : 2;
+    final String prevPageTitle = _isFreeStudy ? t("Modo Papagaio") : t("Língua Afiada");
+    final int nextPageIndex = _isFreeStudy ? 3 : 4;
+
+    final imgPath = _currentWordImage?['imagem']?.toString() ?? '';
+    final hasValidImage = imgPath.isNotEmpty && File(imgPath).existsSync();
+
+    String fieldLabel;
+    if (!_isFreeStudy) {
+      fieldLabel = "${t('Responder em')} $_displayTopic";
+    } else {
+      fieldLabel = _imageAskExplanationInFreeMode ? t('Sua Explicação') : t('Qual é o Objeto de Estudo?');
+    }
+
+    return Column(
+      children: [
+        _buildMinimalArrow(
+          Icons.keyboard_arrow_down,
+          prevPageTitle,
+              () => _pageController.animateToPage(
+            prevPageIndex,
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.easeInOut,
+          ),
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Text('🖼️', style: TextStyle(fontSize: 24)),
+                        const SizedBox(width: 8),
+                        Text(
+                          t("Desafio Visual"),
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      "🔥 $_streak",
+                      style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 18),
+                    ),
+                  ],
+                ),
+                const Divider(height: 15),
+
+                if (_isFreeStudy) ...[
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      icon: const Icon(Icons.swap_horiz, size: 18),
+                      label: Text(
+                        _imageAskExplanationInFreeMode
+                            ? t("Responder: Explicação")
+                            : t("Responder: Objeto de Estudo"),
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _imageAskExplanationInFreeMode = !_imageAskExplanationInFreeMode;
+                          _updateValidImageAnswers();
+                        });
+                      },
+                    ),
+                  ),
+                ],
+
+                FilledButton.icon(
+                  icon: const Icon(Icons.image_search),
+                  label: Text(t('Sortear Imagem')),
+                  onPressed: _drawWordImage,
+                ),
+                const SizedBox(height: 20),
+
+                if (hasValidImage)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.file(
+                      File(imgPath),
+                      height: 220,
+                      fit: BoxFit.contain,
+                    ),
+                  )
+                else
+                  Container(
+                    height: 160,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade400),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Text(
+                          _imageResultText.isNotEmpty ? _imageResultText : t('Clique acima para sortear'),
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: _imageResultText.isNotEmpty ? _imageResultColor : Colors.grey,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                const SizedBox(height: 20),
+                TextField(
+                  controller: _imageAnswerCtrl,
+                  enabled: _currentWordImage != null && !_hasAnsweredImage,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _verifyAnswerImage(),
+                  decoration: InputDecoration(
+                    labelText: fieldLabel,
+                    border: const OutlineInputBorder(),
+                  ),
+                  onChanged: (v) => setState(() {}),
+                ),
+                const SizedBox(height: 15),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    ElevatedButton(
+                      onPressed: (_currentWordImage == null || _imageAnswerCtrl.text.trim().isEmpty || _hasAnsweredImage)
+                          ? null
+                          : _verifyAnswerImage,
+                      child: Text(t('Confirmar Resposta')),
+                    ),
+                    if (_hasAnsweredImage && !appAutoNext.value) ...[
+                      const SizedBox(width: 12),
+                      FilledButton.tonalIcon(
+                        icon: const Icon(Icons.arrow_forward),
+                        label: Text(t('Próximo')),
+                        onPressed: _drawWordImage,
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 12),
+                if (_currentWordImage != null && _imageResultText.isNotEmpty) ...[
+                  Text(
+                    _imageResultText,
+                    style: TextStyle(fontSize: 18, color: _imageResultColor, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    "${_currentWordImage!['ingles']} — ${_currentWordImage!['traducoes'].toString().replaceAll('|', ' / ')}",
+                    style: const TextStyle(fontSize: 14, color: Colors.grey),
+                    textAlign: TextAlign.center,
                   ),
                 ],
               ],
@@ -1009,19 +1418,32 @@ class _PracticeTabState extends State<PracticeTab> {
         _buildMinimalArrow(
           Icons.keyboard_arrow_up,
           t("Desempenho"),
-              () => _pageController.animateToPage(3, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut),
+              () => _pageController.animateToPage(
+            nextPageIndex,
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.easeInOut,
+          ),
         ),
       ],
     );
   }
 
+  // ==========================================
+  // UI: 5. DESEMPENHO
+  // ==========================================
   Widget _buildDesempenhoPractice() {
+    final int prevPageIndex = _isFreeStudy ? 2 : 3;
+
     return Column(
       children: [
         _buildMinimalArrow(
           Icons.keyboard_arrow_down,
-          t("Língua Afiada"),
-              () => _pageController.animateToPage(2, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut),
+          t("Desafio Visual"),
+              () => _pageController.animateToPage(
+            prevPageIndex,
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.easeInOut,
+          ),
         ),
         Expanded(
           child: FutureBuilder(
@@ -1031,7 +1453,9 @@ class _PracticeTabState extends State<PracticeTab> {
               DatabaseHelper.instance.getHistoricoMensal(),
             ]),
             builder: (context, AsyncSnapshot<List<dynamic>> snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
               if (snapshot.hasError || !snapshot.hasData || snapshot.data == null) {
                 return Center(child: Text(t("Nenhuma atividade."), style: const TextStyle(color: Colors.grey)));
               }
@@ -1060,7 +1484,10 @@ class _PracticeTabState extends State<PracticeTab> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(t("Desempenho de Hoje"), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blue)),
+                            Text(
+                              t("Desempenho de Hoje"),
+                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blue),
+                            ),
                             const SizedBox(height: 10),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1073,21 +1500,30 @@ class _PracticeTabState extends State<PracticeTab> {
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(t("Acertos / Erros:")),
-                                Text("${hoje['acertos'] ?? 0} / ${hoje['erros'] ?? 0}", style: const TextStyle(fontWeight: FontWeight.bold)),
+                                Text(
+                                  "${hoje['acertos'] ?? 0} / ${hoje['erros'] ?? 0}",
+                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                ),
                               ],
                             ),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(t("Combos Especiais 🎉:")),
-                                Text("${hoje['especiais'] ?? 0}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                                Text(
+                                  "${hoje['especiais'] ?? 0}",
+                                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
+                                ),
                               ],
                             ),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(t("Tempo no Papagaio 🦜:")),
-                                Text(_formatTime(hoje['tempo_papagaio'] ?? 0), style: const TextStyle(fontWeight: FontWeight.bold)),
+                                Text(
+                                  _formatTime(hoje['tempo_papagaio'] ?? 0),
+                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                ),
                               ],
                             ),
                           ],
@@ -1102,34 +1538,49 @@ class _PracticeTabState extends State<PracticeTab> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(t("Últimos 7 Dias"), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.purple)),
+                            Text(
+                              t("Últimos 7 Dias"),
+                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.purple),
+                            ),
                             const SizedBox(height: 10),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(t("Perguntas Respondidas:")),
-                                Text("${semana['respondidas'] ?? 0}", style: const TextStyle(fontWeight: FontWeight.bold)),
+                                Text(
+                                  "${semana['respondidas'] ?? 0}",
+                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                ),
                               ],
                             ),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(t("Acertos / Erros:")),
-                                Text("${semana['acertos'] ?? 0} / ${semana['erros'] ?? 0}", style: const TextStyle(fontWeight: FontWeight.bold)),
+                                Text(
+                                  "${semana['acertos'] ?? 0} / ${semana['erros'] ?? 0}",
+                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                ),
                               ],
                             ),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(t("Combos Especiais 🎉:")),
-                                Text("${semana['especiais'] ?? 0}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                                Text(
+                                  "${semana['especiais'] ?? 0}",
+                                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
+                                ),
                               ],
                             ),
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(t("Tempo no Papagaio 🦜:")),
-                                Text(_formatTime(semana['tempo_papagaio'] ?? 0), style: const TextStyle(fontWeight: FontWeight.bold)),
+                                Text(
+                                  _formatTime(semana['tempo_papagaio'] ?? 0),
+                                  style: const TextStyle(fontWeight: FontWeight.bold),
+                                ),
                               ],
                             ),
                           ],
@@ -1139,7 +1590,10 @@ class _PracticeTabState extends State<PracticeTab> {
                     const SizedBox(height: 15),
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: Text(" ${t('Histórico Mensal')}", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      child: Text(
+                        " ${t('Histórico Mensal')}",
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
                     ),
                     const SizedBox(height: 10),
                     meses.isEmpty

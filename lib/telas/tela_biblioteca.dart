@@ -21,6 +21,9 @@ class _LibraryTabState extends State<LibraryTab> {
   final _searchCtrl = TextEditingController();
   int _totalWordsCount = 0;
 
+  bool get _isFreeStudy => isCustomStudy(widget.currentLang);
+  String get _displayTopic => getStudyDisplayName(widget.currentLang);
+
   @override
   void initState() {
     super.initState();
@@ -75,7 +78,7 @@ class _LibraryTabState extends State<LibraryTab> {
             children: [
               Flexible(
                 child: Text(
-                  "${t('Biblioteca')} (${t(widget.currentLang)})",
+                  "${t('Biblioteca')} ($_displayTopic)",
                   style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -114,13 +117,21 @@ class _LibraryTabState extends State<LibraryTab> {
                   child: ListTile(
                     leading: hasImage
                         ? CircleAvatar(backgroundImage: FileImage(File(imgPath)))
-                        : const CircleAvatar(child: Icon(Icons.text_fields)),
+                        : CircleAvatar(child: Icon(_isFreeStudy ? Icons.menu_book : Icons.text_fields)),
                     title: Text(word['ingles'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                    subtitle: Text(word['traducao'] ?? ''),
+                    subtitle: Text(
+                      word['traducao'] ?? '',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Container(width: 14, height: 14, decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle)),
+                        Container(
+                          width: 14,
+                          height: 14,
+                          decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
+                        ),
                         const SizedBox(width: 10),
                         const Icon(Icons.chevron_right, color: Colors.grey),
                       ],
@@ -149,6 +160,8 @@ class WordDetailsScreen extends StatefulWidget {
 
 class _WordDetailsScreenState extends State<WordDetailsScreen> {
   List<Map<String, dynamic>> _meanings = [];
+
+  bool get _isFreeStudy => isCustomStudy(widget.currentLang);
 
   @override
   void initState() {
@@ -183,11 +196,18 @@ class _WordDetailsScreenState extends State<WordDetailsScreen> {
     int erros = _meanings.isNotEmpty ? (_meanings[0]['erros'] ?? 0) : 0;
     Color difColor = erros >= 5 ? Colors.red : (erros >= 3 ? Colors.amber : Colors.green);
     String difText = erros >= 5 ? t("Ruim (Vermelho)") : (erros >= 3 ? t("Médio (Amarelo)") : t("Bom (Verde)"));
+    String labelItem = _isFreeStudy ? t('Explicação') : t('Significado');
 
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.ingles),
-        actions: [IconButton(icon: const Icon(Icons.edit), tooltip: t("Editar Palavra"), onPressed: _irParaEdicao)],
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.edit),
+            tooltip: _isFreeStudy ? t("Editar Objeto") : t("Editar Palavra"),
+            onPressed: _irParaEdicao,
+          )
+        ],
       ),
       body: Column(
         children: [
@@ -202,7 +222,10 @@ class _WordDetailsScreenState extends State<WordDetailsScreen> {
                 const SizedBox(width: 8),
                 Text(
                   "${t('Dificuldade Atual:')} $difText",
-                  style: TextStyle(fontWeight: FontWeight.bold, color: difColor == Colors.amber ? Colors.orange.shade700 : difColor),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: difColor == Colors.amber ? Colors.orange.shade700 : difColor,
+                  ),
                 ),
               ],
             ),
@@ -220,14 +243,19 @@ class _WordDetailsScreenState extends State<WordDetailsScreen> {
                 return Column(
                   children: [
                     Text(
-                      "${t('Significado')} ${index + 1}: ${sig['traducao']}",
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: index > 0 ? Colors.blue : null),
+                      "$labelItem ${index + 1}: ${sig['traducao']}",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: index > 0 ? Colors.blue : null,
+                      ),
+                      textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 10),
                     if (hasImg)
                       ClipRRect(
                         borderRadius: BorderRadius.circular(8),
-                        child: Image.file(File(imgPath), height: 180, fit: BoxFit.contain),
+                        child: Image.file(File(imgPath), height: 200, fit: BoxFit.contain),
                       ),
                   ],
                 );
@@ -256,6 +284,9 @@ class _EditWordScreenState extends State<EditWordScreen> {
   final List<Map<String, dynamic>> _editMeanings = [];
   final ImagePicker _picker = ImagePicker();
   int _currentErrors = 0;
+
+  bool get _isFreeStudy => isCustomStudy(widget.currentLang);
+  String get _displayTopic => getStudyDisplayName(widget.currentLang);
 
   @override
   void initState() {
@@ -291,7 +322,10 @@ class _EditWordScreenState extends State<EditWordScreen> {
   Future<void> _alterarFoto(int index, ImageSource source) async {
     final XFile? pickedFile = await _picker.pickImage(source: source);
     if (pickedFile != null) {
-      final String newPath = path.join((await getApplicationDocumentsDirectory()).path, 'img_${Random().nextInt(100000)}.jpg');
+      final String newPath = path.join(
+        (await getApplicationDocumentsDirectory()).path,
+        'img_${Random().nextInt(100000)}.jpg',
+      );
       final File savedImage = await File(pickedFile.path).copy(newPath);
       if (!mounted) return;
       setState(() => _editMeanings[index]['imagem'] = savedImage.path);
@@ -310,8 +344,12 @@ class _EditWordScreenState extends State<EditWordScreen> {
     bool? conf = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        title: Text(t("Excluir Palavra?")),
-        content: Text(t("Deseja apagar esta palavra e TODOS os seus significados nesta língua?")),
+        title: Text(_isFreeStudy ? t("Excluir Objeto?") : t("Excluir Palavra?")),
+        content: Text(
+          _isFreeStudy
+              ? t("Deseja apagar este objeto de estudo e todas as suas explicações?")
+              : t("Deseja apagar esta palavra e TODOS os seus significados nesta língua?"),
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(c, false), child: Text(t("Cancelar"))),
           FilledButton(
@@ -358,8 +396,10 @@ class _EditWordScreenState extends State<EditWordScreen> {
 
   @override
   Widget build(BuildContext context) {
+    String labelMeaning = _isFreeStudy ? t('Explicação') : t('Significado');
+
     return Scaffold(
-      appBar: AppBar(title: Text(t("Editar Palavra"))),
+      appBar: AppBar(title: Text(_isFreeStudy ? t("Editar Objeto") : t("Editar Palavra"))),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(15.0),
@@ -368,13 +408,16 @@ class _EditWordScreenState extends State<EditWordScreen> {
               TextField(
                 controller: _inglesCtrl,
                 decoration: InputDecoration(
-                  labelText: "${t('Palavra Principal')} (${t(widget.currentLang)})",
+                  labelText: "${_isFreeStudy ? t('Objeto Principal') : t('Palavra Principal')} ($_displayTopic)",
                   border: const OutlineInputBorder(),
                 ),
                 style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 15),
-              Text(t("Significados Registados:"), style: const TextStyle(fontWeight: FontWeight.bold)),
+              Text(
+                _isFreeStudy ? t("Explicações Registadas:") : t("Significados Registados:"),
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 10),
               Expanded(
                 child: ListView.builder(
@@ -395,7 +438,9 @@ class _EditWordScreenState extends State<EditWordScreen> {
                                 Expanded(
                                   child: TextField(
                                     controller: m['traducao'],
-                                    decoration: InputDecoration(labelText: "${t('Significado')} ${index + 1}"),
+                                    maxLines: _isFreeStudy ? 3 : 1,
+                                    minLines: 1,
+                                    decoration: InputDecoration(labelText: "$labelMeaning ${index + 1}"),
                                   ),
                                 ),
                                 IconButton(
@@ -440,7 +485,10 @@ class _EditWordScreenState extends State<EditWordScreen> {
                                             if (hasImg)
                                               ListTile(
                                                 leading: const Icon(Icons.delete, color: Colors.red),
-                                                title: Text(t('Remover Imagem'), style: const TextStyle(color: Colors.red)),
+                                                title: Text(
+                                                  t('Remover Imagem'),
+                                                  style: const TextStyle(color: Colors.red),
+                                                ),
                                                 onTap: () {
                                                   Navigator.pop(context);
                                                   setState(() => m['imagem'] = '');
@@ -464,11 +512,18 @@ class _EditWordScreenState extends State<EditWordScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  OutlinedButton.icon(onPressed: _addSignificado, icon: const Icon(Icons.add), label: Text(t("Significado"))),
+                  OutlinedButton.icon(
+                    onPressed: _addSignificado,
+                    icon: const Icon(Icons.add),
+                    label: Text(labelMeaning),
+                  ),
                   TextButton.icon(
                     onPressed: _excluirPalavraToda,
                     icon: const Icon(Icons.delete_forever, color: Colors.red),
-                    label: Text(t("Excluir Palavra"), style: const TextStyle(color: Colors.red)),
+                    label: Text(
+                      _isFreeStudy ? t("Excluir Objeto") : t("Excluir Palavra"),
+                      style: const TextStyle(color: Colors.red),
+                    ),
                   ),
                 ],
               ),

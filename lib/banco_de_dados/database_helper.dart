@@ -2,7 +2,6 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as path;
 import 'package:share_plus/share_plus.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:cross_file/cross_file.dart';
 import 'dart:io';
 import 'dart:math';
 import '../main.dart';
@@ -25,12 +24,18 @@ class DatabaseHelper {
 
     return await openDatabase(
       fullPath,
-      version: 8,
+      version: 9,
       onCreate: (db, version) async {
-        await db.execute('''CREATE TABLE palavras (id INTEGER PRIMARY KEY AUTOINCREMENT, ingles TEXT NOT NULL, traducao TEXT NOT NULL, imagem TEXT, lingua TEXT NOT NULL DEFAULT 'Inglês', erros INTEGER DEFAULT 0)''');
+        await db.execute(
+          '''CREATE TABLE palavras (id INTEGER PRIMARY KEY AUTOINCREMENT, ingles TEXT NOT NULL, traducao TEXT NOT NULL, imagem TEXT, lingua TEXT NOT NULL DEFAULT 'Inglês', erros INTEGER DEFAULT 0)''',
+        );
         await db.execute('''CREATE TABLE configuracoes (chave TEXT PRIMARY KEY, valor TEXT)''');
-        await db.execute('''CREATE TABLE estatisticas (data TEXT PRIMARY KEY, respondidas INTEGER DEFAULT 0, acertos INTEGER DEFAULT 0, erros INTEGER DEFAULT 0, especiais INTEGER DEFAULT 0, tempo_papagaio INTEGER DEFAULT 0)''');
-        await db.execute('''CREATE TABLE estatisticas_mensais (mes TEXT PRIMARY KEY, respondidas INTEGER DEFAULT 0, acertos INTEGER DEFAULT 0, erros INTEGER DEFAULT 0, especiais INTEGER DEFAULT 0, tempo_papagaio INTEGER DEFAULT 0)''');
+        await db.execute(
+          '''CREATE TABLE estatisticas (data TEXT PRIMARY KEY, respondidas INTEGER DEFAULT 0, acertos INTEGER DEFAULT 0, erros INTEGER DEFAULT 0, especiais INTEGER DEFAULT 0, tempo_papagaio INTEGER DEFAULT 0)''',
+        );
+        await db.execute(
+          '''CREATE TABLE estatisticas_mensais (mes TEXT PRIMARY KEY, respondidas INTEGER DEFAULT 0, acertos INTEGER DEFAULT 0, erros INTEGER DEFAULT 0, especiais INTEGER DEFAULT 0, tempo_papagaio INTEGER DEFAULT 0)''',
+        );
 
         await db.insert('configuracoes', {'chave': 'filtro', 'valor': 'todas'});
         await db.insert('configuracoes', {'chave': 'tema', 'valor': 'light'});
@@ -38,23 +43,110 @@ class DatabaseHelper {
         await db.insert('configuracoes', {'chave': 'idioma_nativo', 'valor': 'Português'});
         await db.insert('configuracoes', {'chave': 'feedback_ativo', 'valor': 'true'});
         await db.insert('configuracoes', {'chave': 'treino_inteligente', 'valor': 'false'});
+        await db.insert('configuracoes', {'chave': 'avanco_automatico', 'valor': 'true'});
+        await db.insert('configuracoes', {'chave': 'temas_livres', 'valor': ''});
       },
       onUpgrade: (db, oldVersion, newVersion) async {
-        if (oldVersion < 3) try { await db.execute("ALTER TABLE palavras ADD COLUMN lingua TEXT DEFAULT 'Inglês'"); } catch (_) {}
+        if (oldVersion < 3) {
+          try {
+            await db.execute("ALTER TABLE palavras ADD COLUMN lingua TEXT DEFAULT 'Inglês'");
+          } catch (_) {}
+        }
         if (oldVersion < 6) {
-          await db.execute('''CREATE TABLE IF NOT EXISTS estatisticas (data TEXT PRIMARY KEY, respondidas INTEGER DEFAULT 0, acertos INTEGER DEFAULT 0, erros INTEGER DEFAULT 0, especiais INTEGER DEFAULT 0, tempo_papagaio INTEGER DEFAULT 0)''');
-          await db.execute('''CREATE TABLE IF NOT EXISTS estatisticas_mensais (mes TEXT PRIMARY KEY, respondidas INTEGER DEFAULT 0, acertos INTEGER DEFAULT 0, erros INTEGER DEFAULT 0, especiais INTEGER DEFAULT 0, tempo_papagaio INTEGER DEFAULT 0)''');
+          await db.execute(
+            '''CREATE TABLE IF NOT EXISTS estatisticas (data TEXT PRIMARY KEY, respondidas INTEGER DEFAULT 0, acertos INTEGER DEFAULT 0, erros INTEGER DEFAULT 0, especiais INTEGER DEFAULT 0, tempo_papagaio INTEGER DEFAULT 0)''',
+          );
+          await db.execute(
+            '''CREATE TABLE IF NOT EXISTS estatisticas_mensais (mes TEXT PRIMARY KEY, respondidas INTEGER DEFAULT 0, acertos INTEGER DEFAULT 0, erros INTEGER DEFAULT 0, especiais INTEGER DEFAULT 0, tempo_papagaio INTEGER DEFAULT 0)''',
+          );
         }
         if (oldVersion < 8) {
-          try { await db.execute("ALTER TABLE palavras ADD COLUMN erros INTEGER DEFAULT 0"); } catch (_) {}
+          try {
+            await db.execute("ALTER TABLE palavras ADD COLUMN erros INTEGER DEFAULT 0");
+          } catch (_) {}
+        }
+        if (oldVersion < 9) {
+          await db.insert(
+            'configuracoes',
+            {'chave': 'avanco_automatico', 'valor': 'true'},
+            conflictAlgorithm: ConflictAlgorithm.ignore,
+          );
+          await db.insert(
+            'configuracoes',
+            {'chave': 'temas_livres', 'valor': ''},
+            conflictAlgorithm: ConflictAlgorithm.ignore,
+          );
         }
       },
     );
   }
 
+  // ==========================================
+  // GESTÃO DE BIBLIOTECAS DE TEMAS LIVRES
+  // ==========================================
+  Future<List<String>> getTemasLivres() async {
+    String raw = await getConfig('temas_livres');
+    final Set<String> temas = {};
+    if (raw.isNotEmpty) {
+      for (var item in raw.split('|')) {
+        if (item.trim().isNotEmpty) temas.add(item.trim());
+      }
+    }
+    // Também descobre temas existentes no banco (ex: após importar backup)
+    final db = await instance.database;
+    final rows = await db.rawQuery("SELECT DISTINCT lingua FROM palavras WHERE lingua LIKE 'tema:%'");
+    for (var r in rows) {
+      String l = r['lingua']?.toString() ?? '';
+      if (l.startsWith('tema:') && l.length > 5) {
+        temas.add(l.substring(5));
+      }
+    }
+    return temas.toList();
+  }
+
+  Future<void> salvarTemasLivres(List<String> temas) async {
+    final limpos = temas.map((e) => e.trim()).where((e) => e.isNotEmpty).toSet().toList();
+    await updateConfig('temas_livres', limpos.join('|'));
+  }
+
+  Future<void> renomearTemaLivre(String nomeAntigo, String nomeNovo) async {
+    final db = await instance.database;
+    await db.execute(
+      'UPDATE palavras SET lingua = ? WHERE lingua = ?',
+      ['tema:$nomeNovo', 'tema:$nomeAntigo'],
+    );
+    final atuais = await getTemasLivres();
+    final idx = atuais.indexOf(nomeAntigo);
+    if (idx != -1) {
+      atuais[idx] = nomeNovo;
+    } else {
+      atuais.add(nomeNovo);
+    }
+    await salvarTemasLivres(atuais);
+
+    String idiomaAtual = await getConfig('idioma_atual');
+    if (idiomaAtual == 'tema:$nomeAntigo') {
+      await updateConfig('idioma_atual', 'tema:$nomeNovo');
+    }
+  }
+
+  Future<void> excluirTemaLivre(String nomeTema) async {
+    final db = await instance.database;
+    await db.delete('palavras', where: 'lingua = ?', whereArgs: ['tema:$nomeTema']);
+    final atuais = await getTemasLivres();
+    atuais.remove(nomeTema);
+    await salvarTemasLivres(atuais);
+  }
+
+  // ==========================================
+  // DIFICULDADE E ESTATÍSTICAS
+  // ==========================================
   Future<void> atualizarDificuldade(String ingles, String lingua, bool acertou) async {
     final db = await instance.database;
-    final res = await db.rawQuery('SELECT MAX(erros) as erros FROM palavras WHERE ingles = ? COLLATE NOCASE AND lingua = ?', [ingles, lingua]);
+    final res = await db.rawQuery(
+      'SELECT MAX(erros) as erros FROM palavras WHERE ingles = ? COLLATE NOCASE AND lingua = ?',
+      [ingles, lingua],
+    );
     int errosAtuais = 0;
     if (res.isNotEmpty && res.first['erros'] != null) {
       errosAtuais = (res.first['erros'] as num).toInt();
@@ -66,7 +158,10 @@ class DatabaseHelper {
       errosAtuais = min(6, errosAtuais + 1);
     }
 
-    await db.execute('UPDATE palavras SET erros = ? WHERE ingles = ? COLLATE NOCASE AND lingua = ?', [errosAtuais, ingles, lingua]);
+    await db.execute(
+      'UPDATE palavras SET erros = ? WHERE ingles = ? COLLATE NOCASE AND lingua = ?',
+      [errosAtuais, ingles, lingua],
+    );
   }
 
   Future<void> registrarAtividade(String coluna, [int valor = 1]) async {
@@ -89,15 +184,20 @@ class DatabaseHelper {
     final db = await instance.database;
     String hoje = DateTime.now().toIso8601String().substring(0, 10);
     final res = await db.query('estatisticas', where: 'data = ?', whereArgs: [hoje]);
-    return res.isNotEmpty ? res.first : {'respondidas':0, 'acertos':0, 'erros':0, 'especiais':0, 'tempo_papagaio':0};
+    return res.isNotEmpty
+        ? res.first
+        : {'respondidas': 0, 'acertos': 0, 'erros': 0, 'especiais': 0, 'tempo_papagaio': 0};
   }
 
   Future<Map<String, dynamic>> getEstatisticasSemana() async {
     final db = await instance.database;
     String limite = DateTime.now().subtract(const Duration(days: 7)).toIso8601String().substring(0, 10);
-    final res = await db.rawQuery('''SELECT SUM(respondidas) as respondidas, SUM(acertos) as acertos, SUM(erros) as erros, SUM(especiais) as especiais, SUM(tempo_papagaio) as tempo_papagaio FROM estatisticas WHERE data >= ?''', [limite]);
+    final res = await db.rawQuery(
+      '''SELECT SUM(respondidas) as respondidas, SUM(acertos) as acertos, SUM(erros) as erros, SUM(especiais) as especiais, SUM(tempo_papagaio) as tempo_papagaio FROM estatisticas WHERE data >= ?''',
+      [limite],
+    );
     if (res.isNotEmpty && res.first['respondidas'] != null) return res.first;
-    return {'respondidas':0, 'acertos':0, 'erros':0, 'especiais':0, 'tempo_papagaio':0};
+    return {'respondidas': 0, 'acertos': 0, 'erros': 0, 'especiais': 0, 'tempo_papagaio': 0};
   }
 
   Future<List<Map<String, dynamic>>> getHistoricoMensal() async {
@@ -110,12 +210,17 @@ class DatabaseHelper {
       final db = await instance.database;
       final res = await db.query('configuracoes', where: 'chave = ?', whereArgs: [chave]);
       if (res.isNotEmpty) return res.first['valor'].toString();
-    } catch (_) {} return '';
+    } catch (_) {}
+    return '';
   }
 
   Future<void> updateConfig(String chave, String valor) async {
     final db = await instance.database;
-    await db.insert('configuracoes', {'chave': chave, 'valor': valor}, conflictAlgorithm: ConflictAlgorithm.replace);
+    await db.insert(
+      'configuracoes',
+      {'chave': chave, 'valor': valor},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
   Future<void> insertWord(Map<String, dynamic> row) async {
@@ -126,22 +231,34 @@ class DatabaseHelper {
   Future<List<Map<String, dynamic>>> fetchCustomWords(String linguaAtual, String filtro, String customVal) async {
     final db = await instance.database;
     int limit = -1;
-    if (filtro != 'todas') { limit = filtro == 'custom' ? (int.tryParse(customVal) ?? -1) : (int.tryParse(filtro) ?? -1); }
+    if (filtro != 'todas') {
+      limit = filtro == 'custom' ? (int.tryParse(customVal) ?? -1) : (int.tryParse(filtro) ?? -1);
+    }
 
     String orderBy = 'MAX(id) DESC';
     if (appTreinoInteligente.value) {
       orderBy = 'MAX(erros) DESC, RANDOM()';
     }
 
-    String query = '''SELECT ingles, GROUP_CONCAT(traducao, '|') as traducoes, MAX(imagem) as imagem, MAX(erros) as erros FROM palavras WHERE lingua = ? GROUP BY ingles COLLATE NOCASE ORDER BY $orderBy''';
+    String query =
+    '''SELECT ingles, GROUP_CONCAT(traducao, '|') as traducoes, MAX(imagem) as imagem, MAX(erros) as erros FROM palavras WHERE lingua = ? GROUP BY ingles COLLATE NOCASE ORDER BY $orderBy''';
     if (limit > 0) query += ' LIMIT $limit';
     return await db.rawQuery(query, [linguaAtual]);
   }
 
   Future<List<Map<String, dynamic>>> fetchDistinctWords(String linguaAtual, [String query = '']) async {
     final db = await instance.database;
-    if (query.isEmpty) { return await db.rawQuery('''SELECT ingles, MAX(imagem) as imagem, GROUP_CONCAT(traducao, ', ') as traducao, MAX(erros) as erros FROM palavras WHERE lingua = ? GROUP BY ingles COLLATE NOCASE ORDER BY ingles COLLATE NOCASE ASC''', [linguaAtual]);
-    } else { return await db.rawQuery('''SELECT ingles, MAX(imagem) as imagem, GROUP_CONCAT(traducao, ', ') as traducao, MAX(erros) as erros FROM palavras WHERE lingua = ? AND (ingles LIKE ? OR traducao LIKE ?) GROUP BY ingles COLLATE NOCASE ORDER BY ingles COLLATE NOCASE ASC''', [linguaAtual, '%$query%', '%$query%']); }
+    if (query.isEmpty) {
+      return await db.rawQuery(
+        '''SELECT ingles, MAX(imagem) as imagem, GROUP_CONCAT(traducao, ', ') as traducao, MAX(erros) as erros FROM palavras WHERE lingua = ? GROUP BY ingles COLLATE NOCASE ORDER BY ingles COLLATE NOCASE ASC''',
+        [linguaAtual],
+      );
+    } else {
+      return await db.rawQuery(
+        '''SELECT ingles, MAX(imagem) as imagem, GROUP_CONCAT(traducao, ', ') as traducao, MAX(erros) as erros FROM palavras WHERE lingua = ? AND (ingles LIKE ? OR traducao LIKE ?) GROUP BY ingles COLLATE NOCASE ORDER BY ingles COLLATE NOCASE ASC''',
+        [linguaAtual, '%$query%', '%$query%'],
+      );
+    }
   }
 
   Future<List<Map<String, dynamic>>> fetchMeanings(String ingles, String linguaAtual) async {
@@ -157,7 +274,6 @@ class DatabaseHelper {
   // ==========================================
   // FUNÇÕES DE BACKUP (EXPORTAR E IMPORTAR)
   // ==========================================
-
   Future<void> exportarBackup() async {
     try {
       await instance.database;
@@ -178,7 +294,6 @@ class DatabaseHelper {
       if (result != null && result.files.single.path != null) {
         File backupFile = File(result.files.single.path!);
 
-        // Validação de segurança: se o arquivo for menor que 1KB, não é um DB válido
         if (await backupFile.length() < 1024) {
           return false;
         }
