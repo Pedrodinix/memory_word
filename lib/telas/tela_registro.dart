@@ -140,7 +140,7 @@ class _RegisterTabState extends State<RegisterTab> {
       child: Column(
         children: [
           Text(
-            _isFreeStudy ? "${t('Registar Objeto de Estudo')} ($_displayTopic)" : t("Registar Palavra"),
+            _isFreeStudy ? "${t('Registrar Objeto de Estudo')} ($_displayTopic)" : t("Registrar Palavra"),
             style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             textAlign: TextAlign.center,
           ),

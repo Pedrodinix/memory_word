@@ -415,7 +415,7 @@ class _EditWordScreenState extends State<EditWordScreen> {
               ),
               const SizedBox(height: 15),
               Text(
-                _isFreeStudy ? t("Explicações Registadas:") : t("Significados Registados:"),
+                _isFreeStudy ? t("Explicações Registradas:") : t("Significados Registrados:"),
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 10),

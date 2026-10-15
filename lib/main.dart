@@ -108,7 +108,7 @@ String t(String text) {
     'Coreano': {
       'en': 'Korean', 'de': 'Koreanisch', 'es': 'Coreano', 'fr': 'Coréen',
       'it': 'Coreano', 'ru': 'Корейский', 'ja': '韓国語', 'zh-cn': '韩语',
-      'ko': '한국어', 'hi': 'कोरियाई', 'ar': 'الكورية'
+      'ko': '한국어', 'hi': '코रिया야', 'ar': 'الكورية'
     },
     'Hindi': {
       'en': 'Hindi', 'de': 'Hindi', 'es': 'Hindi', 'fr': 'Hindi',
@@ -302,7 +302,7 @@ String t(String text) {
       'it': 'Registra Parola', 'ru': 'Добавить слово', 'ja': '単語を登録', 'zh-cn': '添加单词',
       'ko': '단어 등록', 'hi': 'शब्द दर्ज करें', 'ar': 'تسجيل كلمة'
     },
-    'Registar Objeto de Estudo': {
+    'Registrar Objeto de Estudo': {
       'en': 'Register Study Object', 'de': 'Lernobjekt registrieren', 'es': 'Registrar Objeto de Estudio', 'fr': "Enregistrer l'objet d'étude",
       'it': 'Registra Oggetto di Studio', 'ru': 'Добавить объект изучения', 'ja': '学習項目を登録', 'zh-cn': '添加学习对象',
       'ko': '학습 항목 등록', 'hi': 'अध्ययन वस्तु दर्ज करें', 'ar': 'تسجيل عنصر دراسة'
@@ -696,8 +696,8 @@ String t(String text) {
 
     // --- TELA DE BIBLIOTECA E EDIÇÃO ---
     'registradas': {
-      'en': 'registered', 'de': 'registriert', 'es': 'registrados', 'fr': 'enregistrés',
-      'it': 'registrati', 'ru': 'сохранено', 'ja': '件登録済み', 'zh-cn': '已记录',
+      'en': 'registered', 'de': 'registriert', 'es': 'registradas', 'fr': 'enregistrés',
+      'it': 'registrate', 'ru': 'сохранено', 'ja': '件登録済み', 'zh-cn': '已记录',
       'ko': '개 등록됨', 'hi': 'दर्ज', 'ar': 'مسجلة'
     },
     'Pesquisar...': {
@@ -750,12 +750,12 @@ String t(String text) {
       'it': 'Oggetto Principale', 'ru': 'Основной объект', 'ja': 'メイン項目', 'zh-cn': '主要对象',
       'ko': '주요 대상', 'hi': 'मुख्य वस्तु', 'ar': 'العنصر الرئيسي'
     },
-    'Significados Registados:': {
+    'Significados Registrados:': {
       'en': 'Registered Meanings:', 'de': 'Registrierte Bedeutungen:', 'es': 'Significados Registrados:', 'fr': 'Significations Enregistrées :',
       'it': 'Significati Registrati:', 'ru': 'Сохраненные значения:', 'ja': '登録された意味：', 'zh-cn': '已记录的含义：',
       'ko': '등록된 의미:', 'hi': 'दर्ज किए गए अर्थ:', 'ar': 'المعاني المسجلة:'
     },
-    'Explicações Registadas:': {
+    'Explicações Registradas:': {
       'en': 'Registered Explanations:', 'de': 'Registrierte Erklärungen:', 'es': 'Explicaciones Registradas:', 'fr': 'Explications Enregistrées :',
       'it': 'Spiegazioni Registrate:', 'ru': 'Сохраненные объяснения:', 'ja': '登録された説明：', 'zh-cn': '已记录的解释：',
       'ko': '등록된 설명:', 'hi': 'दर्ज की गई व्याख्याएँ:', 'ar': 'الشروحات المسجلة:'
