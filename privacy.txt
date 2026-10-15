@@ -1,9 +1,17 @@
 Política de Privacidade para Memory Word
 
-O Memory Word foi desenvolvido como um aplicativo de estudo de vocabulário com funcionamento 100% offline.
+O Memory Word foi desenvolvido como um aplicativo de estudo e memorização de vocabulário com armazenamento local.
 
-Recolha de Dados: O Memory Word não recolhe, armazena, transmite ou partilha quaisquer dados pessoais ou informações dos utilizadores em servidores externos.
+Recolha e Partilha de Dados:
+O Memory Word não recolhe, armazena em nuvem, transmite ou partilha quaisquer dados pessoais ou informações dos utilizadores em servidores externos do programador.
 
-Armazenamento Local: Todos os dados, listas de palavras e progresso criados pelo utilizador são guardados estritamente no armazenamento local do dispositivo, utilizando uma base de dados SQLite privada do aplicativo.
+Armazenamento Local e Backup:
+Todas as listas de palavras, imagens associadas, configurações e estatísticas de progresso criadas pelo utilizador são guardadas estritamente no armazenamento local do dispositivo, utilizando uma base de dados SQLite privada do aplicativo. A exportação ou importação de cópias de segurança (backup) ocorre apenas localmente e por ação direta e voluntária do utilizador.
 
-Contactos: Se tiver alguma dúvida sobre esta política de privacidade, pode entrar em contacto através do ecrã de suporte do programador na Google Play Store.
+Permissões do Dispositivo:
+- Câmara e Galeria (android.permission.CAMERA): Utilizadas exclusivamente quando o utilizador opta por fotografar ou escolher uma imagem da galeria para associar visualmente a uma palavra registada. As fotografias permanecem armazenadas apenas no próprio dispositivo.
+- Microfone (android.permission.RECORD_AUDIO): Utilizado exclusivamente na funcionalidade de treino de pronúncia ("Língua Afiada") para converter a fala em texto através do serviço nativo de reconhecimento de voz do sistema operativo. Nenhum ficheiro de áudio é gravado, retido ou enviado para servidores do programador.
+- Acesso à Internet (android.permission.INTERNET): Utilizado apenas quando o utilizador aciona voluntariamente o botão de tradução automática ao registar uma nova palavra.
+
+Contactos:
+Se tiver alguma dúvida sobre esta política de privacidade, pode entrar em contacto através do ecrã de suporte do programador na Google Play Store.

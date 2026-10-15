@@ -28,6 +28,15 @@ class _LibraryTabState extends State<LibraryTab> {
   }
 
   @override
+  void didUpdateWidget(LibraryTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.currentLang != widget.currentLang) {
+      _searchCtrl.clear();
+      _loadWords();
+    }
+  }
+
+  @override
   void dispose() {
     _searchCtrl.dispose();
     super.dispose();
@@ -36,6 +45,7 @@ class _LibraryTabState extends State<LibraryTab> {
   Future<void> _loadWords([String query = '']) async {
     final words = await DatabaseHelper.instance.fetchDistinctWords(widget.currentLang, query);
     final totalWords = await DatabaseHelper.instance.fetchDistinctWords(widget.currentLang, '');
+    if (!mounted) return;
     setState(() {
       _distinctWords = words;
       _totalWordsCount = totalWords.length;
@@ -43,7 +53,12 @@ class _LibraryTabState extends State<LibraryTab> {
   }
 
   void _abrirDetalhes(String ingles) async {
-    await Navigator.push(context, MaterialPageRoute(builder: (context) => WordDetailsScreen(ingles: ingles, currentLang: widget.currentLang)));
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => WordDetailsScreen(ingles: ingles, currentLang: widget.currentLang),
+      ),
+    );
     _loadWords(_searchCtrl.text);
   }
 
@@ -58,16 +73,26 @@ class _LibraryTabState extends State<LibraryTab> {
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
-              Flexible(child: Text("${t('Biblioteca')} (${t(widget.currentLang)})", style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis)),
+              Flexible(
+                child: Text(
+                  "${t('Biblioteca')} (${t(widget.currentLang)})",
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
               const SizedBox(width: 8),
               Text("($_totalWordsCount ${t('registradas')})", style: const TextStyle(fontSize: 12, color: Colors.grey)),
             ],
           ),
           const SizedBox(height: 10),
           TextField(
-              controller: _searchCtrl,
-              decoration: InputDecoration(labelText: t('Pesquisar...'), prefixIcon: const Icon(Icons.search), border: const OutlineInputBorder()),
-              onChanged: (value) => _loadWords(value)
+            controller: _searchCtrl,
+            decoration: InputDecoration(
+              labelText: t('Pesquisar...'),
+              prefixIcon: const Icon(Icons.search),
+              border: const OutlineInputBorder(),
+            ),
+            onChanged: (value) => _loadWords(value),
           ),
           const SizedBox(height: 10),
           Expanded(
@@ -77,7 +102,8 @@ class _LibraryTabState extends State<LibraryTab> {
               itemCount: _distinctWords.length,
               itemBuilder: (context, index) {
                 final word = _distinctWords[index];
-                final hasImage = word['imagem'] != null && word['imagem'].toString().isNotEmpty;
+                final imgPath = word['imagem']?.toString() ?? '';
+                final hasImage = imgPath.isNotEmpty && File(imgPath).existsSync();
 
                 int erros = word['erros'] ?? 0;
                 Color dotColor = erros >= 5 ? Colors.red : (erros >= 3 ? Colors.amber : Colors.green);
@@ -87,7 +113,7 @@ class _LibraryTabState extends State<LibraryTab> {
                   margin: const EdgeInsets.symmetric(vertical: 6),
                   child: ListTile(
                     leading: hasImage
-                        ? CircleAvatar(backgroundImage: FileImage(File(word['imagem'])))
+                        ? CircleAvatar(backgroundImage: FileImage(File(imgPath)))
                         : const CircleAvatar(child: Icon(Icons.text_fields)),
                     title: Text(word['ingles'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                     subtitle: Text(word['traducao'] ?? ''),
@@ -132,13 +158,20 @@ class _WordDetailsScreenState extends State<WordDetailsScreen> {
 
   Future<void> _loadMeanings() async {
     final res = await DatabaseHelper.instance.fetchMeanings(widget.ingles, widget.currentLang);
+    if (!mounted) return;
     setState(() => _meanings = res);
   }
 
   void _irParaEdicao() async {
-    await Navigator.push(context, MaterialPageRoute(builder: (context) => EditWordScreen(ingles: widget.ingles, meanings: _meanings, currentLang: widget.currentLang)));
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => EditWordScreen(ingles: widget.ingles, meanings: _meanings, currentLang: widget.currentLang),
+      ),
+    );
     final res = await DatabaseHelper.instance.fetchMeanings(widget.ingles, widget.currentLang);
-    if (res.isEmpty && mounted) {
+    if (!mounted) return;
+    if (res.isEmpty) {
       Navigator.pop(context);
     } else {
       setState(() => _meanings = res);
@@ -153,8 +186,8 @@ class _WordDetailsScreenState extends State<WordDetailsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-          title: Text(widget.ingles),
-          actions: [IconButton(icon: const Icon(Icons.edit), tooltip: t("Editar Palavra"), onPressed: _irParaEdicao)]
+        title: Text(widget.ingles),
+        actions: [IconButton(icon: const Icon(Icons.edit), tooltip: t("Editar Palavra"), onPressed: _irParaEdicao)],
       ),
       body: Column(
         children: [
@@ -167,7 +200,10 @@ class _WordDetailsScreenState extends State<WordDetailsScreen> {
               children: [
                 Container(width: 16, height: 16, decoration: BoxDecoration(color: difColor, shape: BoxShape.circle)),
                 const SizedBox(width: 8),
-                Text("${t('Dificuldade Atual:')} $difText", style: TextStyle(fontWeight: FontWeight.bold, color: difColor == Colors.amber ? Colors.orange.shade700 : difColor)),
+                Text(
+                  "${t('Dificuldade Atual:')} $difText",
+                  style: TextStyle(fontWeight: FontWeight.bold, color: difColor == Colors.amber ? Colors.orange.shade700 : difColor),
+                ),
               ],
             ),
           ),
@@ -178,14 +214,21 @@ class _WordDetailsScreenState extends State<WordDetailsScreen> {
               separatorBuilder: (_, _) => const Divider(height: 40),
               itemBuilder: (context, index) {
                 final sig = _meanings[index];
-                final hasImg = sig['imagem'].toString().isNotEmpty;
+                final imgPath = sig['imagem']?.toString() ?? '';
+                final hasImg = imgPath.isNotEmpty && File(imgPath).existsSync();
 
                 return Column(
                   children: [
-                    Text("${t('Significado')} ${index + 1}: ${sig['traducao']}", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: index > 0 ? Colors.blue : null)),
+                    Text(
+                      "${t('Significado')} ${index + 1}: ${sig['traducao']}",
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: index > 0 ? Colors.blue : null),
+                    ),
                     const SizedBox(height: 10),
                     if (hasImg)
-                      ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.file(File(sig['imagem']), height: 180, fit: BoxFit.contain))
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.file(File(imgPath), height: 180, fit: BoxFit.contain),
+                      ),
                   ],
                 );
               },
@@ -222,7 +265,11 @@ class _EditWordScreenState extends State<EditWordScreen> {
       _currentErrors = widget.meanings[0]['erros'] ?? 0;
     }
     for (var m in widget.meanings) {
-      _editMeanings.add({ 'id': m['id'], 'traducao': TextEditingController(text: m['traducao']), 'imagem': m['imagem'] });
+      _editMeanings.add({
+        'id': m['id'],
+        'traducao': TextEditingController(text: m['traducao']),
+        'imagem': m['imagem'],
+      });
     }
   }
 
@@ -236,7 +283,9 @@ class _EditWordScreenState extends State<EditWordScreen> {
   }
 
   void _addSignificado() {
-    setState(() { _editMeanings.add({ 'id': null, 'traducao': TextEditingController(), 'imagem': '' }); });
+    setState(() {
+      _editMeanings.add({'id': null, 'traducao': TextEditingController(), 'imagem': ''});
+    });
   }
 
   Future<void> _alterarFoto(int index, ImageSource source) async {
@@ -244,26 +293,34 @@ class _EditWordScreenState extends State<EditWordScreen> {
     if (pickedFile != null) {
       final String newPath = path.join((await getApplicationDocumentsDirectory()).path, 'img_${Random().nextInt(100000)}.jpg');
       final File savedImage = await File(pickedFile.path).copy(newPath);
+      if (!mounted) return;
       setState(() => _editMeanings[index]['imagem'] = savedImage.path);
     }
   }
 
   void _removerSignificado(int index) {
     if (_editMeanings.length <= 1) return;
-    setState(() => _editMeanings.removeAt(index));
+    setState(() {
+      (_editMeanings[index]['traducao'] as TextEditingController).dispose();
+      _editMeanings.removeAt(index);
+    });
   }
 
   Future<void> _excluirPalavraToda() async {
     bool? conf = await showDialog<bool>(
-        context: context,
-        builder: (c) => AlertDialog(
-            title: Text(t("Excluir Palavra?")),
-            content: Text(t("Deseja apagar esta palavra e TODOS os seus significados nesta língua?")),
-            actions: [
-              TextButton(onPressed: () => Navigator.pop(c, false), child: Text(t("Cancelar"))),
-              FilledButton(style: FilledButton.styleFrom(backgroundColor: Colors.red), onPressed: () => Navigator.pop(c, true), child: Text(t("Excluir")))
-            ]
-        )
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text(t("Excluir Palavra?")),
+        content: Text(t("Deseja apagar esta palavra e TODOS os seus significados nesta língua?")),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c, false), child: Text(t("Cancelar"))),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(c, true),
+            child: Text(t("Excluir")),
+          ),
+        ],
+      ),
     );
 
     if (conf == true) {
@@ -274,7 +331,7 @@ class _EditWordScreenState extends State<EditWordScreen> {
   }
 
   Future<void> _salvarAlteracoes() async {
-    if (_inglesCtrl.text.isEmpty) return;
+    if (_inglesCtrl.text.trim().isEmpty) return;
 
     try {
       final db = DatabaseHelper.instance;
@@ -283,7 +340,13 @@ class _EditWordScreenState extends State<EditWordScreen> {
       for (var m in _editMeanings) {
         String tradText = (m['traducao'] as TextEditingController).text.trim();
         if (tradText.isNotEmpty) {
-          await db.insertWord({ 'ingles': _inglesCtrl.text.trim(), 'traducao': tradText, 'imagem': m['imagem'], 'lingua': widget.currentLang, 'erros': _currentErrors });
+          await db.insertWord({
+            'ingles': _inglesCtrl.text.trim(),
+            'traducao': tradText,
+            'imagem': m['imagem'],
+            'lingua': widget.currentLang,
+            'erros': _currentErrors,
+          });
         }
       }
 
@@ -303,9 +366,12 @@ class _EditWordScreenState extends State<EditWordScreen> {
           child: Column(
             children: [
               TextField(
-                  controller: _inglesCtrl,
-                  decoration: InputDecoration(labelText: "${t('Palavra Principal')} (${t(widget.currentLang)})", border: const OutlineInputBorder()),
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
+                controller: _inglesCtrl,
+                decoration: InputDecoration(
+                  labelText: "${t('Palavra Principal')} (${t(widget.currentLang)})",
+                  border: const OutlineInputBorder(),
+                ),
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 15),
               Text(t("Significados Registados:"), style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -315,7 +381,8 @@ class _EditWordScreenState extends State<EditWordScreen> {
                   itemCount: _editMeanings.length,
                   itemBuilder: (context, index) {
                     final m = _editMeanings[index];
-                    final hasImg = m['imagem'].toString().isNotEmpty;
+                    final imgPath = m['imagem']?.toString() ?? '';
+                    final hasImg = imgPath.isNotEmpty && File(imgPath).existsSync();
 
                     return Card(
                       margin: const EdgeInsets.only(bottom: 15),
@@ -324,37 +391,69 @@ class _EditWordScreenState extends State<EditWordScreen> {
                         child: Column(
                           children: [
                             Row(
-                                children: [
-                                  Expanded(child: TextField(controller: m['traducao'], decoration: InputDecoration(labelText: "${t('Significado')} ${index + 1}"))),
-                                  IconButton(icon: const Icon(Icons.delete_outline, color: Colors.red), onPressed: () => _removerSignificado(index))
-                                ]
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: m['traducao'],
+                                    decoration: InputDecoration(labelText: "${t('Significado')} ${index + 1}"),
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                  onPressed: () => _removerSignificado(index),
+                                ),
+                              ],
                             ),
                             const SizedBox(height: 10),
                             Row(
                               children: [
                                 if (hasImg)
-                                  Container(margin: const EdgeInsets.only(right: 10), child: Image.file(File(m['imagem']), width: 40, height: 40, fit: BoxFit.cover)),
+                                  Container(
+                                    margin: const EdgeInsets.only(right: 10),
+                                    child: Image.file(File(imgPath), width: 40, height: 40, fit: BoxFit.cover),
+                                  ),
                                 TextButton.icon(
                                   icon: const Icon(Icons.image),
                                   label: Text(hasImg ? t("Alterar Foto") : t("Adicionar Foto")),
                                   onPressed: () {
                                     showModalBottomSheet(
-                                        context: context,
-                                        builder: (_) => SafeArea(
-                                            child: Wrap(
-                                                children: [
-                                                  ListTile(leading: const Icon(Icons.camera_alt), title: Text(t('Câmera')), onTap: () { Navigator.pop(context); _alterarFoto(index, ImageSource.camera); }),
-                                                  ListTile(leading: const Icon(Icons.photo_library), title: Text(t('Galeria')), onTap: () { Navigator.pop(context); _alterarFoto(index, ImageSource.gallery); }),
-                                                  if (hasImg)
-                                                    ListTile(leading: const Icon(Icons.delete, color: Colors.red), title: Text(t('Remover Imagem'), style: const TextStyle(color: Colors.red)), onTap: () { Navigator.pop(context); setState(() => m['imagem'] = ''); })
-                                                ]
-                                            )
-                                        )
+                                      context: context,
+                                      builder: (_) => SafeArea(
+                                        child: Wrap(
+                                          children: [
+                                            ListTile(
+                                              leading: const Icon(Icons.camera_alt),
+                                              title: Text(t('Câmera')),
+                                              onTap: () {
+                                                Navigator.pop(context);
+                                                _alterarFoto(index, ImageSource.camera);
+                                              },
+                                            ),
+                                            ListTile(
+                                              leading: const Icon(Icons.photo_library),
+                                              title: Text(t('Galeria')),
+                                              onTap: () {
+                                                Navigator.pop(context);
+                                                _alterarFoto(index, ImageSource.gallery);
+                                              },
+                                            ),
+                                            if (hasImg)
+                                              ListTile(
+                                                leading: const Icon(Icons.delete, color: Colors.red),
+                                                title: Text(t('Remover Imagem'), style: const TextStyle(color: Colors.red)),
+                                                onTap: () {
+                                                  Navigator.pop(context);
+                                                  setState(() => m['imagem'] = '');
+                                                },
+                                              ),
+                                          ],
+                                        ),
+                                      ),
                                     );
                                   },
-                                )
+                                ),
                               ],
-                            )
+                            ),
                           ],
                         ),
                       ),
@@ -363,14 +462,26 @@ class _EditWordScreenState extends State<EditWordScreen> {
                 ),
               ),
               Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    OutlinedButton.icon(onPressed: _addSignificado, icon: const Icon(Icons.add), label: Text(t("Significado"))),
-                    TextButton.icon(onPressed: _excluirPalavraToda, icon: const Icon(Icons.delete_forever, color: Colors.red), label: Text(t("Excluir Palavra"), style: const TextStyle(color: Colors.red)))
-                  ]
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  OutlinedButton.icon(onPressed: _addSignificado, icon: const Icon(Icons.add), label: Text(t("Significado"))),
+                  TextButton.icon(
+                    onPressed: _excluirPalavraToda,
+                    icon: const Icon(Icons.delete_forever, color: Colors.red),
+                    label: Text(t("Excluir Palavra"), style: const TextStyle(color: Colors.red)),
+                  ),
+                ],
               ),
               const Divider(),
-              SizedBox(width: double.infinity, height: 45, child: FilledButton.icon(onPressed: _salvarAlteracoes, icon: const Icon(Icons.save), label: Text(t("Salvar Alterações"))))
+              SizedBox(
+                width: double.infinity,
+                height: 45,
+                child: FilledButton.icon(
+                  onPressed: _salvarAlteracoes,
+                  icon: const Icon(Icons.save),
+                  label: Text(t("Salvar Alterações")),
+                ),
+              ),
             ],
           ),
         ),

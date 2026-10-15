@@ -1,5 +1,9 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as path;
+import 'package:share_plus/share_plus.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:cross_file/cross_file.dart';
+import 'dart:io';
 import 'dart:math';
 import '../main.dart';
 
@@ -148,5 +152,58 @@ class DatabaseHelper {
   Future<void> deleteAllMeanings(String ingles, String linguaAtual) async {
     final db = await instance.database;
     await db.delete('palavras', where: 'ingles = ? COLLATE NOCASE AND lingua = ?', whereArgs: [ingles, linguaAtual]);
+  }
+
+  // ==========================================
+  // FUNÇÕES DE BACKUP (EXPORTAR E IMPORTAR)
+  // ==========================================
+
+  Future<void> exportarBackup() async {
+    try {
+      await instance.database;
+      final dbPath = path.join(await getDatabasesPath(), 'dicionario.db');
+      final file = File(dbPath);
+      if (await file.exists()) {
+        await Share.shareXFiles([XFile(dbPath)], text: 'Backup do Memory Word');
+      }
+    } catch (_) {}
+  }
+
+  Future<bool> importarBackup() async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.any,
+      );
+
+      if (result != null && result.files.single.path != null) {
+        File backupFile = File(result.files.single.path!);
+
+        // Validação de segurança: se o arquivo for menor que 1KB, não é um DB válido
+        if (await backupFile.length() < 1024) {
+          return false;
+        }
+
+        final dbPath = path.join(await getDatabasesPath(), 'dicionario.db');
+
+        if (_database != null) {
+          await _database!.close();
+          _database = null;
+        }
+
+        await backupFile.copy(dbPath);
+
+        try {
+          final testDb = await openDatabase(dbPath);
+          await testDb.rawQuery('SELECT COUNT(*) FROM palavras');
+          await testDb.close();
+        } catch (_) {
+          return false;
+        }
+
+        await database;
+        return true;
+      }
+    } catch (_) {}
+    return false;
   }
 }

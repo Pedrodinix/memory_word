@@ -2,7 +2,7 @@ name: memory_word
 description: "A new Flutter project."
 publish_to: 'none'
 
-version: 1.0.3+6
+version: 1.0.4+7
 
 environment:
   sdk: ^3.13.4
@@ -19,6 +19,9 @@ dependencies:
   flutter_tts: ^4.2.5
   speech_to_text: ^7.5.0
   audioplayers: ^6.8.1
+  share_plus: ^10.0.0
+  file_picker: ^8.0.0
+  cross_file: ^0.3.4
 
 dev_dependencies:
   flutter_test:
@@ -37,4 +40,4 @@ flutter_launcher_icons:
   android: "launcher_icon"
   ios: true
   image_path: "assets/icon.png"
-  min_sdk_android: 21
+  min_sdk_android: 23

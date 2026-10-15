@@ -130,6 +130,12 @@ String t(String text) {
     'Escrita Afiada': {'en': 'Sharp Writing', 'de': 'Scharfes Schreiben', 'es': 'Escritura Afilada', 'fr': 'Écriture Pointue'},
     'Escrita Perfeita! 🎉': {'en': 'Perfect Writing! 🎉', 'de': 'Perfektes Schreiben! 🎉', 'es': '¡Escritura Perfecta! 🎉', 'fr': 'Écriture Parfaite ! 🎉'},
     'Digite o que ouviu': {'en': 'Type what you heard', 'de': 'Tippe, was du gehört hast', 'es': 'Escribe lo que escuchaste', 'fr': 'Tapez ce que vous avez entendu'},
+    // Novas traduções de Backup
+    'Backup e Restauro': {'en': 'Backup and Restore', 'de': 'Sicherung und Wiederherstellung', 'es': 'Copia de Seguridad', 'fr': 'Sauvegarde'},
+    'Exportar': {'en': 'Export', 'de': 'Exportieren', 'es': 'Exportar', 'fr': 'Exporter'},
+    'Importar': {'en': 'Import', 'de': 'Importieren', 'es': 'Importar', 'fr': 'Importer'},
+    'Backup importado com sucesso! Reinicie o aplicativo.': {'en': 'Backup imported successfully! Restart the app.', 'de': 'Erfolgreich importiert! App neu starten.', 'es': '¡Copia importada! Reinicia la aplicación.', 'fr': 'Importation réussie ! Redémarrez l\'app.'},
+    'Nenhum backup selecionado ou falha na importação.': {'en': 'No backup selected or import failed.', 'de': 'Kein Backup ausgewählt ou fehlgeschlagen.', 'es': 'Ninguna copia seleccionada o fallo.', 'fr': 'Aucune sauvegarde sélectionnée ou échec.'},
   };
   return dict[text]?[code] ?? text;
 }
@@ -326,7 +332,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
       appNativeLanguage.value = _idiomaNativoSelecionado;
       appFeedbackEnabled.value = _isFeedbackEnabled;
 
-      if (!mounted) return;
+      if (!context.mounted) return;
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t('Configurações salvas!'))));
     } catch (_) {}
@@ -395,7 +401,41 @@ class _SettingsSheetState extends State<SettingsSheet> {
                   padding: const EdgeInsets.only(top: 10),
                   child: TextField(controller: _customCtrl, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: t("Nº Personalizado (> 0)"), border: const OutlineInputBorder())),
                 ),
-              const Divider(),
+
+              // ==========================================
+              // NOVA SECÇÃO DE BACKUP E RESTAURO
+              // ==========================================
+              const Divider(height: 30),
+              Text(t("Backup e Restauro"), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.upload_file),
+                    label: Text(t("Exportar")),
+                    onPressed: () async {
+                      await DatabaseHelper.instance.exportarBackup();
+                    },
+                  ),
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.download),
+                    label: Text(t("Importar")),
+                    onPressed: () async {
+                      bool sucesso = await DatabaseHelper.instance.importarBackup();
+                      if (!context.mounted) return;
+                      if (sucesso) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t('Backup importado com sucesso! Reinicie o aplicativo.')), backgroundColor: Colors.green));
+                        Navigator.pop(context);
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t('Nenhum backup selecionado ou falha na importação.')), backgroundColor: Colors.red));
+                      }
+                    },
+                  ),
+                ],
+              ),
+
+              const Divider(height: 30),
               Align(alignment: Alignment.centerRight, child: FilledButton(onPressed: _salvar, child: Text(t("Salvar")))),
               const SizedBox(height: 10),
             ],
