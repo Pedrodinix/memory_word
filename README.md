@@ -48,10 +48,3 @@ O **MemoryWord** é um aplicativo móvel de alta performance desenvolvido de rai
 * **`file_picker` & `share_plus`:** Gestão nativa para extração e injeção do ficheiro de Backup SQLite.
 
 ---
-
-## 📥 Como Executar o Projeto
-
-1. Certifica-te de que tens o **Flutter SDK** e o **Android Studio/Xcode** instalados no teu computador.
-2. Clona este repositório:
-   ```bash
-   git clone [https://github.com/Pedrodinix/memory_word.git](https://github.com/Pedrodinix/memory_word.git)
