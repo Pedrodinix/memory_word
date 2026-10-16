@@ -366,7 +366,22 @@ class _EditWordScreenState extends State<EditWordScreen> {
   }
 
   Future<void> _salvarAlteracoes() async {
-    if (_inglesCtrl.text.trim().isEmpty) return;
+    final bool hasAtLeastOneMeaning = _editMeanings.any(
+          (m) => (m['traducao'] as TextEditingController).text.trim().isNotEmpty,
+    );
+
+    if (_inglesCtrl.text.trim().isEmpty || !hasAtLeastOneMeaning) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            _isFreeStudy
+                ? t('Preencha o objeto de estudo e a explicação antes de salvar.')
+                : t('Preencha a palavra e a tradução antes de salvar.'),
+          ),
+        ),
+      );
+      return;
+    }
 
     try {
       final db = DatabaseHelper.instance;

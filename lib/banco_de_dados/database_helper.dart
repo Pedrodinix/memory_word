@@ -46,7 +46,6 @@ class DatabaseHelper {
     if (dedicatedFile.existsSync()) {
       return dedicatedFile;
     }
-    // Fallback de segurança caso ainda exista algum caminho absoluto antigo
     final legacyFile = File(imageRef.trim());
     if (legacyFile.existsSync()) {
       return legacyFile;
@@ -79,7 +78,6 @@ class DatabaseHelper {
         final String fileName = path.basename(rawImg);
         final String targetPath = path.join(mediaDir, fileName);
 
-        // Se o valor salvo no banco tinha barras de diretório antigo, migramos o arquivo e limpamos o banco
         if (rawImg != fileName) {
           final oldFile = File(rawImg);
           final newFile = File(targetPath);
@@ -393,6 +391,12 @@ class DatabaseHelper {
   Future<void> exportarBackup() async {
     try {
       await initMediaDirectory();
+      final db = await database;
+      // Garante que todos os dados em cache WAL sejam gravados no arquivo físico antes de ler os bytes
+      try {
+        await db.rawQuery('PRAGMA wal_checkpoint(FULL)');
+      } catch (_) {}
+
       final dbPath = path.join(await getDatabasesPath(), 'dicionario.db');
       final dbFile = File(dbPath);
       if (!await dbFile.exists()) return;
@@ -423,6 +427,17 @@ class DatabaseHelper {
       await zipFile.writeAsBytes(zipBytes, flush: true);
 
       await Share.shareXFiles([XFile(zipPath)], text: 'Backup Completo MemoryWord');
+    } catch (_) {}
+  }
+
+  Future<void> _limparArquivosWalAuxiliares(String dbPath) async {
+    final walFile = File('$dbPath-wal');
+    final shmFile = File('$dbPath-shm');
+    try {
+      if (await walFile.exists()) await walFile.delete();
+    } catch (_) {}
+    try {
+      if (await shmFile.exists()) await shmFile.delete();
     } catch (_) {}
   }
 
@@ -465,6 +480,7 @@ class DatabaseHelper {
         // Testa integridade do banco antes de substituir o atual
         final tempDbPath = path.join(tempDir.path, 'temp_validacao.db');
         final tempDbFile = File(tempDbPath);
+        await _limparArquivosWalAuxiliares(tempDbPath);
         final List<int> dbBytes = List<int>.from(dbEntry.content as Iterable<int>);
         await tempDbFile.writeAsBytes(dbBytes, flush: true);
 
@@ -474,16 +490,19 @@ class DatabaseHelper {
           await testDb.close();
         } catch (_) {
           if (await tempDbFile.exists()) await tempDbFile.delete();
+          await _limparArquivosWalAuxiliares(tempDbPath);
           return false;
         }
 
-        // Fecha o banco ativo e substitui pelo banco do backup
+        // Fecha o banco ativo, remove resíduos WAL/SHM e substitui pelo banco do backup
         if (_database != null) {
           await _database!.close();
           _database = null;
         }
+        await _limparArquivosWalAuxiliares(dbPath);
         await tempDbFile.copy(dbPath);
         if (await tempDbFile.exists()) await tempDbFile.delete();
+        await _limparArquivosWalAuxiliares(tempDbPath);
 
         // Extrai todas as imagens do pacote diretamente para a pasta dedicada do aplicativo
         for (final file in archive) {
@@ -500,6 +519,7 @@ class DatabaseHelper {
         // Suporte retrocompatível para arquivos .db antigos
         final tempDbPath = path.join(tempDir.path, 'temp_validacao_legacy.db');
         final tempDbFile = File(tempDbPath);
+        await _limparArquivosWalAuxiliares(tempDbPath);
         await selectedFile.copy(tempDbPath);
 
         try {
@@ -508,6 +528,7 @@ class DatabaseHelper {
           await testDb.close();
         } catch (_) {
           if (await tempDbFile.exists()) await tempDbFile.delete();
+          await _limparArquivosWalAuxiliares(tempDbPath);
           return false;
         }
 
@@ -515,8 +536,10 @@ class DatabaseHelper {
           await _database!.close();
           _database = null;
         }
+        await _limparArquivosWalAuxiliares(dbPath);
         await tempDbFile.copy(dbPath);
         if (await tempDbFile.exists()) await tempDbFile.delete();
+        await _limparArquivosWalAuxiliares(tempDbPath);
       }
 
       // Reabre o banco, normaliza eventuais caminhos antigos e limpa imagens órfãs

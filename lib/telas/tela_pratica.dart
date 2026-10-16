@@ -492,6 +492,14 @@ class _PracticeTabState extends State<PracticeTab> {
     _falar(_currentWordSharp!['ingles']);
   }
 
+  String _normalizeForComparison(String input) {
+    return input
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^\p{L}\p{N}\s]', unicode: true), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
+
   void _listenSharp() async {
     if (_hasAnsweredSharp) return;
 
@@ -500,6 +508,9 @@ class _PracticeTabState extends State<PracticeTab> {
         onStatus: (val) {
           if (val == 'notListening' || val == 'done') {
             if (mounted) setState(() => _isListening = false);
+            if (_spokenText.trim().isNotEmpty && !_hasAnsweredSharp) {
+              _verifySpeech();
+            }
           }
         },
         onError: (_) {
@@ -507,14 +518,22 @@ class _PracticeTabState extends State<PracticeTab> {
         },
       );
       if (available) {
-        setState(() => _isListening = true);
+        setState(() {
+          _spokenText = '';
+          _isListening = true;
+        });
         AppLanguage langData = supportedLanguages[widget.currentLang] ?? supportedLanguages['Inglês']!;
         _speech.listen(
           onResult: (val) {
+            if (!mounted) return;
             setState(() {
               _spokenText = val.recognizedWords;
-              if (val.hasConfidenceRating && val.confidence > 0) _verifySpeech();
             });
+            if (val.finalResult) {
+              _speech.stop();
+              setState(() => _isListening = false);
+              _verifySpeech();
+            }
           },
           listenOptions: stt.SpeechListenOptions(localeId: langData.ttsCode),
         );
@@ -522,33 +541,34 @@ class _PracticeTabState extends State<PracticeTab> {
         setState(() => _isListening = false);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(t('Reconhecimento indisponível no telemóvel.'))),
+            SnackBar(content: Text(t('Reconhecimento de voz indisponível no celular.'))),
           );
         }
       }
     } else {
       setState(() => _isListening = false);
-      _speech.stop();
+      await _speech.stop();
       _verifySpeech();
     }
   }
 
   void _verifySpeech() async {
-    if (_currentWordSharp == null || _spokenText.isEmpty || _hasAnsweredSharp) return;
+    if (_currentWordSharp == null || _spokenText.trim().isEmpty || _hasAnsweredSharp) return;
 
     setState(() {
       _hasAnsweredSharp = true;
+      _isListening = false;
     });
-    String target = _currentWordSharp!['ingles'].toString().toLowerCase().trim();
-    String spoken = _spokenText.toLowerCase().trim();
+    String target = _normalizeForComparison(_currentWordSharp!['ingles'].toString());
+    String spoken = _normalizeForComparison(_spokenText);
 
-    bool acertou = (spoken == target || spoken.contains(target) || target.contains(spoken));
+    bool acertou = target.isNotEmpty && (spoken == target || spoken.contains(target));
     setState(() {
       if (acertou) {
         _sharpResultText = t('Pronúncia Perfeita! 🎉');
         _sharpResultColor = Colors.green;
       } else {
-        _sharpResultText = '${t('Entendemos:')} "$spoken"';
+        _sharpResultText = '${t('Entendemos:')} "${_spokenText.trim()}"';
         _sharpResultColor = Colors.red;
       }
     });
@@ -568,16 +588,18 @@ class _PracticeTabState extends State<PracticeTab> {
     setState(() {
       _hasAnsweredSharp = true;
     });
-    String target = _currentWordSharp!['ingles'].toString().toLowerCase().trim();
-    String userAnswer = _sharpAnswerCtrl.text.toLowerCase().trim();
+    String rawTarget = _currentWordSharp!['ingles'].toString().trim();
+    String targetNorm = _normalizeForComparison(rawTarget);
+    String userNorm = _normalizeForComparison(_sharpAnswerCtrl.text);
 
-    bool acertou = (target == userAnswer);
+    bool acertou = (rawTarget.toLowerCase() == _sharpAnswerCtrl.text.trim().toLowerCase()) ||
+        (targetNorm.isNotEmpty && targetNorm == userNorm);
     setState(() {
       if (acertou) {
         _sharpResultText = t('Escrita Perfeita! 🎉');
         _sharpResultColor = Colors.green;
       } else {
-        _sharpResultText = '${t('Incorreta. O correto é:')} $target';
+        _sharpResultText = '${t('Incorreta. O correto é:')} $rawTarget';
         _sharpResultColor = Colors.red;
       }
     });
@@ -613,7 +635,7 @@ class _PracticeTabState extends State<PracticeTab> {
       setState(() {
         _currentWordImage = null;
         _imageResultText = t(
-          'Nenhum item com imagem encontrado nesta biblioteca! Adicione fotos aos seus registos para usar este modo.',
+          'Nenhum item com imagem encontrado nesta biblioteca! Adicione fotos aos seus registros para usar este modo.',
         );
         _imageResultColor = Colors.orange.shade800;
       });

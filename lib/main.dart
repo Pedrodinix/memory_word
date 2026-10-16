@@ -216,7 +216,7 @@ String t(String text) {
       'it': 'Nuovo nome argomento', 'ru': 'Новое название темы', 'ja': '新しいテーマ名', 'zh-cn': '新主题名称',
       'ko': '새 주제 이름', 'hi': 'नया विषय नाम', 'ar': 'اسم الموضوع الجديد'
     },
-    'Deseja apagar este tema e todos os objetos de estudo registados nele?': {
+    'Deseja apagar este tema e todos os objetos de estudo registrados nele?': {
       'en': 'Do you want to delete this topic and all study objects registered in it?',
       'de': 'Möchten Sie dieses Thema und alle darin gespeicherten Lernobjekte löschen?',
       'es': '¿Deseas eliminar este tema y todos los objetos de estudio registrados en él?',
@@ -314,6 +314,19 @@ String t(String text) {
       'it': 'Numero Personalizzato (> 0)', 'ru': 'Свое число (> 0)', 'ja': 'カスタム数 (> 0)', 'zh-cn': '自定义数量 (> 0)',
       'ko': '사용자 지정 개수 (> 0)', 'hi': 'कस्टम संख्या (> 0)', 'ar': 'عدد مخصص (> 0)'
     },
+    'Informe um número válido maior que 0 para o filtro personalizado.': {
+      'en': 'Please enter a valid number greater than 0 for the custom filter.',
+      'de': 'Bitte geben Sie eine gültige Zahl größer als 0 für den Filter ein.',
+      'es': 'Ingresa un número válido mayor que 0 para el filtro personalizado.',
+      'fr': 'Veuillez entrer un nombre valide supérieur à 0 pour le filtre personnalisé.',
+      'it': 'Inserisci un numero valido maggiore di 0 per il filtro personalizzato.',
+      'ru': 'Введите корректное число больше 0 для пользовательского фильтра.',
+      'ja': 'カスタムフィルターには0より大きい有効な数値を入力してください。',
+      'zh-cn': '请为自定义筛选输入大于 0 的有效数字。',
+      'ko': '사용자 지정 필터에 0보다 큰 유효한 숫자를 입력하세요.',
+      'hi': 'कस्टम फ़िल्टर के लिए कृपया 0 से बड़ी मान्य संख्या दर्ज करें।',
+      'ar': 'يرجى إدخال رقم صالح أكبر من 0 للفلتر المخصص.'
+    },
     'Salvar': {
       'en': 'Save', 'de': 'Speichern', 'es': 'Guardar', 'fr': 'Enregistrer',
       'it': 'Salva', 'ru': 'Сохранить', 'ja': '保存', 'zh-cn': '保存',
@@ -392,7 +405,7 @@ String t(String text) {
       'ko': '기존 항목', 'hi': 'मौजूदा वस्तु', 'ar': 'عنصر موجود'
     },
     'Palavra Existente': {
-      'en': 'Existing Word', 'de': 'Vorhandenes Wort', 'es': 'Palavra Existente', 'fr': 'Mot Existant',
+      'en': 'Existing Word', 'de': 'Vorhandenes Wort', 'es': 'Palabra Existente', 'fr': 'Mot Existant',
       'it': 'Parola Esistente', 'ru': 'Слово уже существует', 'ja': '既存の単語', 'zh-cn': '单词已存在',
       'ko': '기존 단어', 'hi': 'मौजूदा शब्द', 'ar': 'كلمة موجودة'
     },
@@ -524,7 +537,7 @@ String t(String text) {
       'it': 'Estrai Immagine', 'ru': 'Выбрать картинку', 'ja': '画像を引く', 'zh-cn': '抽取图片',
       'ko': '이미지 뽑기', 'hi': 'चित्र चुनें', 'ar': 'سحب صورة'
     },
-    'Nenhum item com imagem encontrado nesta biblioteca! Adicione fotos aos seus registos para usar este modo.': {
+    'Nenhum item com imagem encontrado nesta biblioteca! Adicione fotos aos seus registros para usar este modo.': {
       'en': 'No items with images found in this library! Add photos to your records to use this mode.',
       'de': 'Keine Einträge mit Bild gefunden! Füge Fotos hinzu, um diesen Modus zu nutzen.',
       'es': '¡No hay elementos con imagen en esta biblioteca! Añade fotos a tus registros para usar este modo.',
@@ -647,7 +660,7 @@ String t(String text) {
       'it': 'In ascolto... Parla ora!', 'ru': 'Слушаю... Говорите!', 'ja': '聞き取り中... 話してください！', 'zh-cn': '正在倾听... 请说话！',
       'ko': '듣는 중... 지금 말하세요!', 'hi': 'सुन रहा हूँ... अब बोलें!', 'ar': 'جارٍ الاستماع... تحدث الآن!'
     },
-    'Reconhecimento indisponível no telemóvel.': {
+    'Reconhecimento de voz indisponível no celular.': {
       'en': 'Speech recognition unavailable on this device.', 'de': 'Spracherkennung auf diesem Gerät nicht verfügbar.', 'es': 'Reconocimiento de voz no disponible en el dispositivo.', 'fr': 'Reconnaissance vocale indisponible sur cet appareil.',
       'it': 'Riconoscimento vocale non disponibile sul dispositivo.', 'ru': 'Распознавание речи недоступно на устройстве.', 'ja': 'この端末では音声認識を利用できません。', 'zh-cn': '此设备不支持语音识别。',
       'ko': '이 기기에서 음성 인식을 사용할 수 없습니다.', 'hi': 'इस डिवाइस पर वॉइस पहचान उपलब्ध नहीं है।', 'ar': 'التعرف على الصوت غير متاح على هذا الجهاز.'
@@ -840,7 +853,7 @@ String t(String text) {
     'Deseja apagar esta palavra e TODOS os seus significados nesta língua?': {
       'en': 'Do you want to delete this word and ALL its meanings in this language?',
       'de': 'Möchten Sie dieses Wort und ALLE seine Bedeutungen in dieser Sprache löschen?',
-      'es': '¿Deseas eliminar esta palabra y TODOS sus significados en este idioma?',
+      'es': '¿Deseas eliminar esta palabra e TODOS sus significados en este idioma?',
       'fr': 'Voulez-vous supprimer ce mot et TOUTES ses significations dans cette langue ?',
       'it': 'Vuoi eliminare questa parola e TUTTI i suoi significati in questa lingua?',
       'ru': 'Удалить это слово и ВСЕ его значения на этом языке?',
@@ -1008,13 +1021,17 @@ class _MainScreenState extends State<MainScreen> {
     super.dispose();
   }
 
-  void _abrirConfiguracoes() {
-    showModalBottomSheet(
+  void _abrirConfiguracoes() async {
+    final String idiomaNativoAntes = appNativeLanguage.value;
+    final bool? salvou = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) => const SettingsSheet(),
     );
+    if (salvou != true && appNativeLanguage.value != idiomaNativoAntes) {
+      appNativeLanguage.value = idiomaNativoAntes;
+    }
   }
 
   @override
@@ -1248,7 +1265,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
       context: context,
       builder: (c) => AlertDialog(
         title: Text("${t('Excluir')} '$_temaLivreSelecionado'?"),
-        content: Text(t("Deseja apagar este tema e todos os objetos de estudo registados nele?")),
+        content: Text(t("Deseja apagar este tema e todos os objetos de estudo registrados nele?")),
         actions: [
           TextButton(onPressed: () => Navigator.pop(c, false), child: Text(t("Cancelar"))),
           FilledButton(
@@ -1282,6 +1299,9 @@ class _SettingsSheetState extends State<SettingsSheet> {
     if (_filtro == 'custom') {
       int? val = int.tryParse(_customCtrl.text.trim());
       if (val == null || val <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(t('Informe um número válido maior que 0 para o filtro personalizado.'))),
+        );
         return;
       }
     }
@@ -1310,7 +1330,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
       appAutoNext.value = _isAutoNext;
 
       if (!mounted) return;
-      Navigator.pop(context);
+      Navigator.pop(context, true);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t('Configurações salvas!'))));
     } catch (_) {}
   }
@@ -1548,7 +1568,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
                               backgroundColor: Colors.green,
                             ),
                           );
-                          Navigator.pop(context);
+                          Navigator.pop(context, true);
                         } else {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
