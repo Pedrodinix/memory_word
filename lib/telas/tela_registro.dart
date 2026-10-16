@@ -2,10 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:translator/translator.dart' as tr;
 import 'package:flutter_tts/flutter_tts.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as path;
 import 'dart:io';
-import 'dart:math';
 
 import '../main.dart';
 import '../banco_de_dados/database_helper.dart';
@@ -21,7 +18,7 @@ class RegisterTab extends StatefulWidget {
 class _RegisterTabState extends State<RegisterTab> {
   final _inglesCtrl = TextEditingController();
   final _traducaoCtrl = TextEditingController();
-  File? _imageFile;
+  String? _savedImageFileName;
   bool _isTranslating = false;
   final ImagePicker _picker = ImagePicker();
   final FlutterTts _flutterTts = FlutterTts();
@@ -65,15 +62,16 @@ class _RegisterTabState extends State<RegisterTab> {
   }
 
   Future<void> _pickImage(ImageSource source) async {
-    final XFile? pickedFile = await _picker.pickImage(source: source);
+    final XFile? pickedFile = await _picker.pickImage(
+      source: source,
+      maxWidth: 1080,
+      maxHeight: 1080,
+      imageQuality: 80,
+    );
     if (pickedFile != null) {
-      final String newPath = path.join(
-        (await getApplicationDocumentsDirectory()).path,
-        'img_${Random().nextInt(100000)}.jpg',
-      );
-      final File savedImage = await File(pickedFile.path).copy(newPath);
+      final String fileName = await DatabaseHelper.instance.saveImageToAppDirectory(pickedFile.path);
       if (!mounted) return;
-      setState(() => _imageFile = savedImage);
+      setState(() => _savedImageFileName = fileName);
     }
   }
 
@@ -115,7 +113,7 @@ class _RegisterTabState extends State<RegisterTab> {
       await db.insertWord({
         'ingles': _inglesCtrl.text.trim(),
         'traducao': _traducaoCtrl.text.trim(),
-        'imagem': _imageFile?.path ?? '',
+        'imagem': _savedImageFileName ?? '',
         'lingua': widget.currentLang,
       });
       if (!mounted) return;
@@ -128,13 +126,15 @@ class _RegisterTabState extends State<RegisterTab> {
       setState(() {
         _inglesCtrl.clear();
         _traducaoCtrl.clear();
-        _imageFile = null;
+        _savedImageFileName = null;
       });
     } catch (_) {}
   }
 
   @override
   Widget build(BuildContext context) {
+    final File? previewFile = DatabaseHelper.instance.getImageFile(_savedImageFileName);
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20.0),
       child: Column(
@@ -202,12 +202,17 @@ class _RegisterTabState extends State<RegisterTab> {
             ],
           ),
           const SizedBox(height: 20),
-          if (_imageFile != null) ...[
-            Image.file(_imageFile!, height: 150, fit: BoxFit.cover),
+          if (previewFile != null) ...[
+            Image.file(previewFile, height: 150, fit: BoxFit.cover),
             TextButton.icon(
               icon: const Icon(Icons.delete, color: Colors.red),
               label: Text(t('Remover Foto'), style: const TextStyle(color: Colors.red)),
-              onPressed: () => setState(() => _imageFile = null),
+              onPressed: () async {
+                try {
+                  if (await previewFile.exists()) await previewFile.delete();
+                } catch (_) {}
+                if (mounted) setState(() => _savedImageFileName = null);
+              },
             ),
           ],
           const SizedBox(height: 20),

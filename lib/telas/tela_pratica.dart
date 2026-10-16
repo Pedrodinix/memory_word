@@ -72,7 +72,6 @@ class _PracticeTabState extends State<PracticeTab> {
   String _imageResultText = '';
   Color _imageResultColor = Colors.black;
   bool _hasAnsweredImage = false;
-  // No Estudo Livre, define se o usuário quer digitar o Objeto (false) ou a Explicação (true)
   bool _imageAskExplanationInFreeMode = false;
   List<String> _validAnswersImage = [];
 
@@ -605,10 +604,8 @@ class _PracticeTabState extends State<PracticeTab> {
       customGlobal,
     );
 
-    // Filtra apenas itens que possuem arquivo de imagem válido salvo no dispositivo
     final wordsWithImages = allWords.where((w) {
-      final p = w['imagem']?.toString() ?? '';
-      return p.isNotEmpty && File(p).existsSync();
+      return db.getImageFile(w['imagem']?.toString()) != null;
     }).toList();
 
     if (!mounted) return;
@@ -635,10 +632,8 @@ class _PracticeTabState extends State<PracticeTab> {
   void _updateValidImageAnswers() {
     if (_currentWordImage == null) return;
     if (!_isFreeStudy) {
-      // No modo de Idiomas, o usuário vê a imagem e responde a palavra no idioma de estudo
       _validAnswersImage = [_currentWordImage!['ingles'].toString().trim().toLowerCase()];
     } else {
-      // No modo de Estudo Livre, responde o Objeto de Estudo ou a Explicação conforme o seletor
       if (!_imageAskExplanationInFreeMode) {
         _validAnswersImage = [_currentWordImage!['ingles'].toString().trim().toLowerCase()];
       } else {
@@ -661,7 +656,6 @@ class _PracticeTabState extends State<PracticeTab> {
     final userAnswer = _imageAnswerCtrl.text.trim().toLowerCase();
     bool acertou = _validAnswersImage.contains(userAnswer);
 
-    // No Estudo Livre, se o usuário digitou exatamente a explicação ou o objeto, também mostramos feedback claro
     setState(() {
       if (acertou) {
         _imageResultText = t('Resposta Correta! 🎉');
@@ -765,8 +759,7 @@ class _PracticeTabState extends State<PracticeTab> {
   // UI: 1. MODO CLÁSSICO
   // ==========================================
   Widget _buildNormalPractice() {
-    final imgPath = _currentWordNormal?['imagem']?.toString() ?? '';
-    final hasValidImage = imgPath.isNotEmpty && File(imgPath).existsSync();
+    final File? imgFile = DatabaseHelper.instance.getImageFile(_currentWordNormal?['imagem']?.toString());
 
     String inputLabel;
     if (_isFreeStudy) {
@@ -877,10 +870,10 @@ class _PracticeTabState extends State<PracticeTab> {
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 10),
-                if (_resultTextNormal.isNotEmpty && hasValidImage)
+                if (_resultTextNormal.isNotEmpty && imgFile != null)
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: Image.file(File(imgPath), height: 160, fit: BoxFit.contain),
+                    child: Image.file(imgFile, height: 160, fit: BoxFit.contain),
                   ),
               ],
             ),
@@ -1258,8 +1251,7 @@ class _PracticeTabState extends State<PracticeTab> {
     final String prevPageTitle = _isFreeStudy ? t("Modo Papagaio") : t("Língua Afiada");
     final int nextPageIndex = _isFreeStudy ? 3 : 4;
 
-    final imgPath = _currentWordImage?['imagem']?.toString() ?? '';
-    final hasValidImage = imgPath.isNotEmpty && File(imgPath).existsSync();
+    final File? imgFile = DatabaseHelper.instance.getImageFile(_currentWordImage?['imagem']?.toString());
 
     String fieldLabel;
     if (!_isFreeStudy) {
@@ -1332,11 +1324,11 @@ class _PracticeTabState extends State<PracticeTab> {
                 ),
                 const SizedBox(height: 20),
 
-                if (hasValidImage)
+                if (imgFile != null)
                   ClipRRect(
                     borderRadius: BorderRadius.circular(12),
                     child: Image.file(
-                      File(imgPath),
+                      imgFile,
                       height: 220,
                       fit: BoxFit.contain,
                     ),

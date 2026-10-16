@@ -1,7 +1,9 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:archive/archive.dart';
 import 'dart:io';
 import 'dart:math';
 import '../main.dart';
@@ -9,9 +11,119 @@ import '../main.dart';
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
   static Database? _database;
+  static String? _mediaDirPath;
 
   DatabaseHelper._init();
 
+  // ==========================================
+  // DIRETÓRIO DEDICADO DE IMAGENS DO APP
+  // ==========================================
+  Future<String> get mediaDirectoryPath async {
+    if (_mediaDirPath != null) return _mediaDirPath!;
+    final docsDir = await getApplicationDocumentsDirectory();
+    final mediaDir = Directory(path.join(docsDir.path, 'media_memory_word'));
+    if (!await mediaDir.exists()) {
+      await mediaDir.create(recursive: true);
+    }
+    _mediaDirPath = mediaDir.path;
+    return _mediaDirPath!;
+  }
+
+  /// Inicializa a pasta dedicada de imagens e migra caminhos antigos se existirem
+  Future<void> initMediaDirectory() async {
+    await mediaDirectoryPath;
+    await _migrarCaminhosDeImagensAntigas();
+    await limparImagensOrfas();
+  }
+
+  /// Resolve o nome do arquivo salvo no banco para o arquivo físico na pasta do app
+  File? getImageFile(String? imageRef) {
+    if (imageRef == null || imageRef.trim().isEmpty || _mediaDirPath == null) {
+      return null;
+    }
+    final cleanName = path.basename(imageRef.trim());
+    final dedicatedFile = File(path.join(_mediaDirPath!, cleanName));
+    if (dedicatedFile.existsSync()) {
+      return dedicatedFile;
+    }
+    // Fallback de segurança caso ainda exista algum caminho absoluto antigo
+    final legacyFile = File(imageRef.trim());
+    if (legacyFile.existsSync()) {
+      return legacyFile;
+    }
+    return null;
+  }
+
+  /// Copia uma imagem capturada para a pasta dedicada do app e retorna APENAS o nome do arquivo
+  Future<String> saveImageToAppDirectory(String sourceFilePath) async {
+    final mediaDir = await mediaDirectoryPath;
+    final ext = path.extension(sourceFilePath).isNotEmpty ? path.extension(sourceFilePath) : '.jpg';
+    final fileName = 'img_${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(10000)}$ext';
+    final destinationPath = path.join(mediaDir, fileName);
+    await File(sourceFilePath).copy(destinationPath);
+    return fileName;
+  }
+
+  /// Converte caminhos absolutos antigos no banco para apenas o nome do arquivo e move a foto para a pasta dedicada
+  Future<void> _migrarCaminhosDeImagensAntigas() async {
+    try {
+      final db = await database;
+      final mediaDir = await mediaDirectoryPath;
+      final rows = await db.query('palavras', columns: ['id', 'imagem'], where: "imagem IS NOT NULL AND imagem != ''");
+
+      for (var row in rows) {
+        final int id = row['id'] as int;
+        final String rawImg = row['imagem']?.toString() ?? '';
+        if (rawImg.isEmpty) continue;
+
+        final String fileName = path.basename(rawImg);
+        final String targetPath = path.join(mediaDir, fileName);
+
+        // Se o valor salvo no banco tinha barras de diretório antigo, migramos o arquivo e limpamos o banco
+        if (rawImg != fileName) {
+          final oldFile = File(rawImg);
+          final newFile = File(targetPath);
+          if (await oldFile.exists() && !await newFile.exists()) {
+            try {
+              await oldFile.copy(targetPath);
+              await oldFile.delete();
+            } catch (_) {}
+          }
+          await db.update('palavras', {'imagem': fileName}, where: 'id = ?', whereArgs: [id]);
+        }
+      }
+    } catch (_) {}
+  }
+
+  /// Remove imagens físicas da pasta dedicada que não pertencem mais a nenhuma palavra do banco
+  Future<void> limparImagensOrfas() async {
+    try {
+      final db = await database;
+      final mediaDir = Directory(await mediaDirectoryPath);
+      if (!await mediaDir.exists()) return;
+
+      final rows = await db.rawQuery("SELECT DISTINCT imagem FROM palavras WHERE imagem IS NOT NULL AND imagem != ''");
+      final Set<String> activeFiles = rows
+          .map((r) => path.basename(r['imagem'].toString().trim()))
+          .where((name) => name.isNotEmpty)
+          .toSet();
+
+      await for (var entity in mediaDir.list()) {
+        if (entity is File) {
+          final name = path.basename(entity.path);
+          if (!activeFiles.contains(name)) {
+            try {
+              await entity.delete();
+            } catch (_) {}
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  // ==========================================
+  // INICIALIZAÇÃO DO BANCO SQLITE
+  // ==========================================
   Future<Database> get database async {
     if (_database != null) return _database!;
     _database = await _initDB('dicionario.db');
@@ -24,7 +136,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       fullPath,
-      version: 9,
+      version: 10,
       onCreate: (db, version) async {
         await db.execute(
           '''CREATE TABLE palavras (id INTEGER PRIMARY KEY AUTOINCREMENT, ingles TEXT NOT NULL, traducao TEXT NOT NULL, imagem TEXT, lingua TEXT NOT NULL DEFAULT 'Inglês', erros INTEGER DEFAULT 0)''',
@@ -92,7 +204,6 @@ class DatabaseHelper {
         if (item.trim().isNotEmpty) temas.add(item.trim());
       }
     }
-    // Também descobre temas existentes no banco (ex: após importar backup)
     final db = await instance.database;
     final rows = await db.rawQuery("SELECT DISTINCT lingua FROM palavras WHERE lingua LIKE 'tema:%'");
     for (var r in rows) {
@@ -136,6 +247,7 @@ class DatabaseHelper {
     final atuais = await getTemasLivres();
     atuais.remove(nomeTema);
     await salvarTemasLivres(atuais);
+    await limparImagensOrfas();
   }
 
   // ==========================================
@@ -225,7 +337,11 @@ class DatabaseHelper {
 
   Future<void> insertWord(Map<String, dynamic> row) async {
     final db = await instance.database;
-    await db.insert('palavras', row, conflictAlgorithm: ConflictAlgorithm.replace);
+    final cleanRow = Map<String, dynamic>.from(row);
+    if (cleanRow['imagem'] != null && cleanRow['imagem'].toString().isNotEmpty) {
+      cleanRow['imagem'] = path.basename(cleanRow['imagem'].toString().trim());
+    }
+    await db.insert('palavras', cleanRow, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<List<Map<String, dynamic>>> fetchCustomWords(String linguaAtual, String filtro, String customVal) async {
@@ -272,16 +388,41 @@ class DatabaseHelper {
   }
 
   // ==========================================
-  // FUNÇÕES DE BACKUP (EXPORTAR E IMPORTAR)
+  // BACKUP COMPLETO (.ZIP COM BANCO + IMAGENS)
   // ==========================================
   Future<void> exportarBackup() async {
     try {
-      await instance.database;
+      await initMediaDirectory();
       final dbPath = path.join(await getDatabasesPath(), 'dicionario.db');
-      final file = File(dbPath);
-      if (await file.exists()) {
-        await Share.shareXFiles([XFile(dbPath)], text: 'Backup do Memory Word');
+      final dbFile = File(dbPath);
+      if (!await dbFile.exists()) return;
+
+      final archive = Archive();
+
+      // 1. Adiciona o banco de dados SQLite ao pacote
+      final dbBytes = await dbFile.readAsBytes();
+      archive.addFile(ArchiveFile('dicionario.db', dbBytes.length, dbBytes));
+
+      // 2. Adiciona todas as imagens ativas da pasta dedicada dentro de 'media/'
+      final mediaDir = Directory(await mediaDirectoryPath);
+      if (await mediaDir.exists()) {
+        await for (var entity in mediaDir.list()) {
+          if (entity is File) {
+            final fileName = path.basename(entity.path);
+            final imgBytes = await entity.readAsBytes();
+            archive.addFile(ArchiveFile('media/$fileName', imgBytes.length, imgBytes));
+          }
+        }
       }
+
+      // 3. Codifica o pacote .zip em diretório temporário e abre o menu de compartilhamento
+      final zipBytes = ZipEncoder().encode(archive);
+      final tempDir = await getTemporaryDirectory();
+      final zipPath = path.join(tempDir.path, 'backup_memory_word.zip');
+      final zipFile = File(zipPath);
+      await zipFile.writeAsBytes(zipBytes, flush: true);
+
+      await Share.shareXFiles([XFile(zipPath)], text: 'Backup Completo MemoryWord');
     } catch (_) {}
   }
 
@@ -291,34 +432,100 @@ class DatabaseHelper {
         type: FileType.any,
       );
 
-      if (result != null && result.files.single.path != null) {
-        File backupFile = File(result.files.single.path!);
+      if (result == null || result.files.single.path == null) {
+        return false;
+      }
 
-        if (await backupFile.length() < 1024) {
+      final selectedFile = File(result.files.single.path!);
+      if (await selectedFile.length() < 512) {
+        return false;
+      }
+
+      final bytes = await selectedFile.readAsBytes();
+      final dbPath = path.join(await getDatabasesPath(), 'dicionario.db');
+      final tempDir = await getTemporaryDirectory();
+      final mediaDir = await mediaDirectoryPath;
+
+      // Verifica pelos primeiros bytes se é um pacote .ZIP ('PK' -> 0x50, 0x4B)
+      final bool isZipPackage = bytes.length >= 4 && bytes[0] == 0x50 && bytes[1] == 0x4B;
+
+      if (isZipPackage) {
+        final archive = ZipDecoder().decodeBytes(bytes);
+
+        ArchiveFile? dbEntry;
+        for (final file in archive) {
+          if (file.isFile && path.basename(file.name) == 'dicionario.db') {
+            dbEntry = file;
+            break;
+          }
+        }
+
+        if (dbEntry == null) return false;
+
+        // Testa integridade do banco antes de substituir o atual
+        final tempDbPath = path.join(tempDir.path, 'temp_validacao.db');
+        final tempDbFile = File(tempDbPath);
+        final List<int> dbBytes = List<int>.from(dbEntry.content as Iterable<int>);
+        await tempDbFile.writeAsBytes(dbBytes, flush: true);
+
+        try {
+          final testDb = await openDatabase(tempDbPath);
+          await testDb.rawQuery('SELECT COUNT(*) FROM palavras');
+          await testDb.close();
+        } catch (_) {
+          if (await tempDbFile.exists()) await tempDbFile.delete();
           return false;
         }
 
-        final dbPath = path.join(await getDatabasesPath(), 'dicionario.db');
+        // Fecha o banco ativo e substitui pelo banco do backup
+        if (_database != null) {
+          await _database!.close();
+          _database = null;
+        }
+        await tempDbFile.copy(dbPath);
+        if (await tempDbFile.exists()) await tempDbFile.delete();
+
+        // Extrai todas as imagens do pacote diretamente para a pasta dedicada do aplicativo
+        for (final file in archive) {
+          if (file.isFile && file.name != dbEntry.name) {
+            final imgFileName = path.basename(file.name);
+            if (imgFileName.isNotEmpty) {
+              final outFile = File(path.join(mediaDir, imgFileName));
+              final List<int> imgBytes = List<int>.from(file.content as Iterable<int>);
+              await outFile.writeAsBytes(imgBytes, flush: true);
+            }
+          }
+        }
+      } else {
+        // Suporte retrocompatível para arquivos .db antigos
+        final tempDbPath = path.join(tempDir.path, 'temp_validacao_legacy.db');
+        final tempDbFile = File(tempDbPath);
+        await selectedFile.copy(tempDbPath);
+
+        try {
+          final testDb = await openDatabase(tempDbPath);
+          await testDb.rawQuery('SELECT COUNT(*) FROM palavras');
+          await testDb.close();
+        } catch (_) {
+          if (await tempDbFile.exists()) await tempDbFile.delete();
+          return false;
+        }
 
         if (_database != null) {
           await _database!.close();
           _database = null;
         }
-
-        await backupFile.copy(dbPath);
-
-        try {
-          final testDb = await openDatabase(dbPath);
-          await testDb.rawQuery('SELECT COUNT(*) FROM palavras');
-          await testDb.close();
-        } catch (_) {
-          return false;
-        }
-
-        await database;
-        return true;
+        await tempDbFile.copy(dbPath);
+        if (await tempDbFile.exists()) await tempDbFile.delete();
       }
-    } catch (_) {}
-    return false;
+
+      // Reabre o banco, normaliza eventuais caminhos antigos e limpa imagens órfãs
+      await database;
+      await _migrarCaminhosDeImagensAntigas();
+      await limparImagensOrfas();
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 }

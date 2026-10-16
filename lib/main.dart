@@ -37,6 +37,7 @@ final ValueNotifier<String> appNativeLanguage = ValueNotifier('Português');
 final ValueNotifier<bool> appFeedbackEnabled = ValueNotifier(true);
 final ValueNotifier<bool> appTreinoInteligente = ValueNotifier(false);
 final ValueNotifier<bool> appAutoNext = ValueNotifier(true);
+final ValueNotifier<int> appDataVersion = ValueNotifier(0);
 
 // Helpers para identificar se o usuário está estudando um Idioma ou um Tema Livre
 bool isCustomStudy(String langKey) => langKey.startsWith('tema:');
@@ -51,6 +52,34 @@ String getStudyDisplayName(String langKey) {
 String getStudyFlagOrIcon(String langKey) {
   if (isCustomStudy(langKey)) return '🎓';
   return supportedLanguages[langKey]?.flag ?? '🌐';
+}
+
+Future<void> carregarConfiguracoesGlobaisDoBanco() async {
+  final db = DatabaseHelper.instance;
+  String temaSalvo = await db.getConfig('tema');
+  String idiomaSalvo = await db.getConfig('idioma_atual');
+  String idiomaNativoSalvo = await db.getConfig('idioma_nativo');
+  String feedbackSalvo = await db.getConfig('feedback_ativo');
+  String treinoSalvo = await db.getConfig('treino_inteligente');
+  String autoNextSalvo = await db.getConfig('avanco_automatico');
+
+  appThemeMode.value = (temaSalvo == 'dark') ? ThemeMode.dark : ThemeMode.light;
+  if (idiomaSalvo.isNotEmpty && (supportedLanguages.containsKey(idiomaSalvo) || isCustomStudy(idiomaSalvo))) {
+    appLanguage.value = idiomaSalvo;
+  }
+  if (idiomaNativoSalvo.isNotEmpty && supportedLanguages.containsKey(idiomaNativoSalvo)) {
+    appNativeLanguage.value = idiomaNativoSalvo;
+  }
+  if (feedbackSalvo.isNotEmpty) {
+    appFeedbackEnabled.value = (feedbackSalvo == 'true');
+  }
+  if (treinoSalvo.isNotEmpty) {
+    appTreinoInteligente.value = (treinoSalvo == 'true');
+  }
+  if (autoNextSalvo.isNotEmpty) {
+    appAutoNext.value = (autoNextSalvo == 'true');
+  }
+  appDataVersion.value++;
 }
 
 // --- MOTOR DE TRADUÇÃO GLOBAL COMPLETO (12 IDIOMAS) ---
@@ -108,7 +137,7 @@ String t(String text) {
     'Coreano': {
       'en': 'Korean', 'de': 'Koreanisch', 'es': 'Coreano', 'fr': 'Coréen',
       'it': 'Coreano', 'ru': 'Корейский', 'ja': '韓国語', 'zh-cn': '韩语',
-      'ko': '한국어', 'hi': '코रिया야', 'ar': 'الكورية'
+      'ko': '한국어', 'hi': 'कोरियाई', 'ar': 'الكورية'
     },
     'Hindi': {
       'en': 'Hindi', 'de': 'Hindi', 'es': 'Hindi', 'fr': 'Hindi',
@@ -883,18 +912,18 @@ String t(String text) {
       'it': 'Importa', 'ru': 'Импорт', 'ja': 'インポート', 'zh-cn': '导入',
       'ko': '가져오기', 'hi': 'आयात करें', 'ar': 'استيراد'
     },
-    'Backup importado com sucesso! Reinicie o aplicativo.': {
-      'en': 'Backup imported successfully! Restart the app.',
-      'de': 'Backup erfolgreich importiert! App neu starten.',
-      'es': '¡Copia importada con éxito! Reinicia la aplicación.',
-      'fr': 'Sauvegarde importée avec succès ! Redémarrez l\'application.',
-      'it': 'Backup importato con successo! Riavvia l\'applicazione.',
-      'ru': 'Резервная копия успешно импортирована! Перезапустите приложение.',
-      'ja': 'バックアップをインポートしました！アプリを再起動してください。',
-      'zh-cn': '备份导入成功！请重启应用。',
-      'ko': '백업을 성공적으로 가져왔습니다! 앱을 다시 시작하세요.',
-      'hi': 'बैकअप सफलतापूर्वक आयात किया गया! ऐप को रीस्टार्ट करें।',
-      'ar': 'تم استيراد النسخة الاحتياطية بنجاح! أعد تشغيل التطبيق.'
+    'Backup importado com sucesso!': {
+      'en': 'Backup imported successfully!',
+      'de': 'Backup erfolgreich importiert!',
+      'es': '¡Copia importada con éxito!',
+      'fr': 'Sauvegarde importée avec succès !',
+      'it': 'Backup importato con successo!',
+      'ru': 'Резервная копия успешно импортирована!',
+      'ja': 'バックアップをインポートしました！',
+      'zh-cn': '备份导入成功！',
+      'ko': '백업을 성공적으로 가져왔습니다!',
+      'hi': 'बैकअप सफलतापूर्वक आयात किया गया!',
+      'ar': 'تم استيراد النسخة الاحتياطية بنجاح!'
     },
     'Nenhum backup selecionado ou falha na importação.': {
       'en': 'No backup selected or import failed.',
@@ -916,31 +945,9 @@ String t(String text) {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final db = DatabaseHelper.instance;
+  await db.initMediaDirectory();
   await db.limparDadosAntigos();
-
-  String temaSalvo = await db.getConfig('tema');
-  String idiomaSalvo = await db.getConfig('idioma_atual');
-  String idiomaNativoSalvo = await db.getConfig('idioma_nativo');
-  String feedbackSalvo = await db.getConfig('feedback_ativo');
-  String treinoSalvo = await db.getConfig('treino_inteligente');
-  String autoNextSalvo = await db.getConfig('avanco_automatico');
-
-  appThemeMode.value = (temaSalvo == 'dark') ? ThemeMode.dark : ThemeMode.light;
-  if (idiomaSalvo.isNotEmpty && (supportedLanguages.containsKey(idiomaSalvo) || isCustomStudy(idiomaSalvo))) {
-    appLanguage.value = idiomaSalvo;
-  }
-  if (idiomaNativoSalvo.isNotEmpty && supportedLanguages.containsKey(idiomaNativoSalvo)) {
-    appNativeLanguage.value = idiomaNativoSalvo;
-  }
-  if (feedbackSalvo.isNotEmpty) {
-    appFeedbackEnabled.value = (feedbackSalvo == 'true');
-  }
-  if (treinoSalvo.isNotEmpty) {
-    appTreinoInteligente.value = (treinoSalvo == 'true');
-  }
-  if (autoNextSalvo.isNotEmpty) {
-    appAutoNext.value = (autoNextSalvo == 'true');
-  }
+  await carregarConfiguracoesGlobaisDoBanco();
 
   runApp(const MemoryWordApp());
 }
@@ -1043,17 +1050,23 @@ class _MainScreenState extends State<MainScreen> {
           )
         ],
       ),
-      body: ValueListenableBuilder<String>(
-        valueListenable: appLanguage,
-        builder: (context, currentLang, child) {
-          return PageView(
-            controller: _mainPageController,
-            onPageChanged: (index) => setState(() => _currentIndex = index),
-            children: [
-              RegisterTab(currentLang: currentLang),
-              PracticeTab(currentLang: currentLang),
-              LibraryTab(currentLang: currentLang),
-            ],
+      body: ValueListenableBuilder<int>(
+        valueListenable: appDataVersion,
+        builder: (context, dataVer, child) {
+          return ValueListenableBuilder<String>(
+            valueListenable: appLanguage,
+            builder: (context, currentLang, child) {
+              return PageView(
+                key: ValueKey('pageview_$dataVer'),
+                controller: _mainPageController,
+                onPageChanged: (index) => setState(() => _currentIndex = index),
+                children: [
+                  RegisterTab(currentLang: currentLang),
+                  PracticeTab(currentLang: currentLang),
+                  LibraryTab(currentLang: currentLang),
+                ],
+              );
+            },
           );
         },
       ),
@@ -1087,6 +1100,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
   bool _isDark = false;
   bool _isFeedbackEnabled = true;
   bool _isAutoNext = true;
+  bool _isBusyBackup = false;
   String _filtro = 'todas';
   bool _modoTemaLivre = false;
   String _idiomaSelecionado = 'Inglês';
@@ -1496,42 +1510,57 @@ class _SettingsSheetState extends State<SettingsSheet> {
               const Divider(height: 30),
               Text(t("Backup e Restauro"), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  ElevatedButton.icon(
-                    icon: const Icon(Icons.upload_file),
-                    label: Text(t("Exportar")),
-                    onPressed: () async {
-                      await DatabaseHelper.instance.exportarBackup();
-                    },
+              if (_isBusyBackup)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12.0),
+                    child: CircularProgressIndicator(),
                   ),
-                  ElevatedButton.icon(
-                    icon: const Icon(Icons.download),
-                    label: Text(t("Importar")),
-                    onPressed: () async {
-                      bool sucesso = await DatabaseHelper.instance.importarBackup();
-                      if (!context.mounted) return;
-                      if (sucesso) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(t('Backup importado com sucesso! Reinicie o aplicativo.')),
-                            backgroundColor: Colors.green,
-                          ),
-                        );
-                        Navigator.pop(context);
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(t('Nenhum backup selecionado ou falha na importação.')),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                      }
-                    },
-                  ),
-                ],
-              ),
+                )
+              else
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.upload_file),
+                      label: Text(t("Exportar")),
+                      onPressed: () async {
+                        setState(() => _isBusyBackup = true);
+                        await DatabaseHelper.instance.exportarBackup();
+                        if (mounted) setState(() => _isBusyBackup = false);
+                      },
+                    ),
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.download),
+                      label: Text(t("Importar")),
+                      onPressed: () async {
+                        setState(() => _isBusyBackup = true);
+                        bool sucesso = await DatabaseHelper.instance.importarBackup();
+                        if (sucesso) {
+                          await carregarConfiguracoesGlobaisDoBanco();
+                        }
+                        if (!context.mounted) return;
+                        setState(() => _isBusyBackup = false);
+                        if (sucesso) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(t('Backup importado com sucesso!')),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                          Navigator.pop(context);
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(t('Nenhum backup selecionado ou falha na importação.')),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                  ],
+                ),
 
               const Divider(height: 30),
               Align(

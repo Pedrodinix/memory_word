@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as path;
 import 'dart:io';
-import 'dart:math';
 
 import '../main.dart';
 import '../banco_de_dados/database_helper.dart';
@@ -105,8 +102,7 @@ class _LibraryTabState extends State<LibraryTab> {
               itemCount: _distinctWords.length,
               itemBuilder: (context, index) {
                 final word = _distinctWords[index];
-                final imgPath = word['imagem']?.toString() ?? '';
-                final hasImage = imgPath.isNotEmpty && File(imgPath).existsSync();
+                final File? imgFile = DatabaseHelper.instance.getImageFile(word['imagem']?.toString());
 
                 int erros = word['erros'] ?? 0;
                 Color dotColor = erros >= 5 ? Colors.red : (erros >= 3 ? Colors.amber : Colors.green);
@@ -115,8 +111,8 @@ class _LibraryTabState extends State<LibraryTab> {
                   elevation: 2,
                   margin: const EdgeInsets.symmetric(vertical: 6),
                   child: ListTile(
-                    leading: hasImage
-                        ? CircleAvatar(backgroundImage: FileImage(File(imgPath)))
+                    leading: imgFile != null
+                        ? CircleAvatar(backgroundImage: FileImage(imgFile))
                         : CircleAvatar(child: Icon(_isFreeStudy ? Icons.menu_book : Icons.text_fields)),
                     title: Text(word['ingles'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                     subtitle: Text(
@@ -237,8 +233,7 @@ class _WordDetailsScreenState extends State<WordDetailsScreen> {
               separatorBuilder: (_, _) => const Divider(height: 40),
               itemBuilder: (context, index) {
                 final sig = _meanings[index];
-                final imgPath = sig['imagem']?.toString() ?? '';
-                final hasImg = imgPath.isNotEmpty && File(imgPath).existsSync();
+                final File? imgFile = DatabaseHelper.instance.getImageFile(sig['imagem']?.toString());
 
                 return Column(
                   children: [
@@ -252,10 +247,10 @@ class _WordDetailsScreenState extends State<WordDetailsScreen> {
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 10),
-                    if (hasImg)
+                    if (imgFile != null)
                       ClipRRect(
                         borderRadius: BorderRadius.circular(8),
-                        child: Image.file(File(imgPath), height: 200, fit: BoxFit.contain),
+                        child: Image.file(imgFile, height: 200, fit: BoxFit.contain),
                       ),
                   ],
                 );
@@ -320,15 +315,16 @@ class _EditWordScreenState extends State<EditWordScreen> {
   }
 
   Future<void> _alterarFoto(int index, ImageSource source) async {
-    final XFile? pickedFile = await _picker.pickImage(source: source);
+    final XFile? pickedFile = await _picker.pickImage(
+      source: source,
+      maxWidth: 1080,
+      maxHeight: 1080,
+      imageQuality: 80,
+    );
     if (pickedFile != null) {
-      final String newPath = path.join(
-        (await getApplicationDocumentsDirectory()).path,
-        'img_${Random().nextInt(100000)}.jpg',
-      );
-      final File savedImage = await File(pickedFile.path).copy(newPath);
+      final String fileName = await DatabaseHelper.instance.saveImageToAppDirectory(pickedFile.path);
       if (!mounted) return;
-      setState(() => _editMeanings[index]['imagem'] = savedImage.path);
+      setState(() => _editMeanings[index]['imagem'] = fileName);
     }
   }
 
@@ -363,6 +359,7 @@ class _EditWordScreenState extends State<EditWordScreen> {
 
     if (conf == true) {
       await DatabaseHelper.instance.deleteAllMeanings(widget.ingles, widget.currentLang);
+      await DatabaseHelper.instance.limparImagensOrfas();
       if (!mounted) return;
       Navigator.pop(context);
     }
@@ -387,6 +384,8 @@ class _EditWordScreenState extends State<EditWordScreen> {
           });
         }
       }
+
+      await db.limparImagensOrfas();
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t('Alterações salvas!'))));
@@ -424,8 +423,8 @@ class _EditWordScreenState extends State<EditWordScreen> {
                   itemCount: _editMeanings.length,
                   itemBuilder: (context, index) {
                     final m = _editMeanings[index];
-                    final imgPath = m['imagem']?.toString() ?? '';
-                    final hasImg = imgPath.isNotEmpty && File(imgPath).existsSync();
+                    final File? imgFile = DatabaseHelper.instance.getImageFile(m['imagem']?.toString());
+                    final bool hasImg = imgFile != null;
 
                     return Card(
                       margin: const EdgeInsets.only(bottom: 15),
@@ -455,7 +454,7 @@ class _EditWordScreenState extends State<EditWordScreen> {
                                 if (hasImg)
                                   Container(
                                     margin: const EdgeInsets.only(right: 10),
-                                    child: Image.file(File(imgPath), width: 40, height: 40, fit: BoxFit.cover),
+                                    child: Image.file(imgFile, width: 40, height: 40, fit: BoxFit.cover),
                                   ),
                                 TextButton.icon(
                                   icon: const Icon(Icons.image),
