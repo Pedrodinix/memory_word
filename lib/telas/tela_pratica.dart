@@ -8,6 +8,7 @@ import 'dart:math';
 
 import '../main.dart';
 import '../banco_de_dados/database_helper.dart';
+import 'tela_tutorial.dart';
 
 class PracticeTab extends StatefulWidget {
   final String currentLang;
@@ -97,6 +98,8 @@ class _PracticeTabState extends State<PracticeTab> {
     super.initState();
     _speech = stt.SpeechToText();
     _loadSettings();
+    appNavigateToPracticePage.addListener(_onExternalPracticePageRequest);
+
     _parrotCustomCtrl.addListener(() {
       _parrotCustomVal = _parrotCustomCtrl.text.trim();
       _saveSettings();
@@ -109,6 +112,18 @@ class _PracticeTabState extends State<PracticeTab> {
     _audioCorrect.setSource(AssetSource('correct.mp3'));
     _audioSpecial.setSource(AssetSource('special.mp3'));
     _audioWrong.setSource(AssetSource('wrong.mp3'));
+  }
+
+  void _onExternalPracticePageRequest() {
+    final target = appNavigateToPracticePage.value;
+    if (target != null && _pageController.hasClients) {
+      _pageController.animateToPage(
+        target,
+        duration: const Duration(milliseconds: 450),
+        curve: Curves.easeInOut,
+      );
+      appNavigateToPracticePage.value = null;
+    }
   }
 
   @override
@@ -153,6 +168,7 @@ class _PracticeTabState extends State<PracticeTab> {
 
   @override
   void dispose() {
+    appNavigateToPracticePage.removeListener(_onExternalPracticePageRequest);
     _normalTimerToken++;
     _sharpTimerToken++;
     _imageTimerToken++;
@@ -219,6 +235,7 @@ class _PracticeTabState extends State<PracticeTab> {
 
     if (isCorrect) {
       DatabaseHelper.instance.registrarAtividade('acertos');
+      agendarVerificacaoDeProgressoRecente();
       _streak++;
       if (_streak == _nextMilestone) {
         DatabaseHelper.instance.registrarAtividade('especiais');
@@ -363,6 +380,7 @@ class _PracticeTabState extends State<PracticeTab> {
       widget.currentLang,
       gerouComboEspecial: hitCombo,
     );
+    agendarVerificacaoDeProgressoRecente();
 
     if (!mounted) return;
     setState(() {

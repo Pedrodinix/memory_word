@@ -121,7 +121,7 @@ class DatabaseHelper {
   }
 
   // ==========================================
-  // INICIALIZAÇÃO DO BANCO SQLITE (VERSÃO 12)
+  // INICIALIZAÇÃO DO BANCO SQLITE (VERSÃO 13)
   // ==========================================
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -135,17 +135,20 @@ class DatabaseHelper {
 
     return await openDatabase(
       fullPath,
-      version: 12,
+      version: 13,
       onCreate: (db, version) async {
         await db.execute(
           '''CREATE TABLE palavras (id INTEGER PRIMARY KEY AUTOINCREMENT, ingles TEXT NOT NULL, traducao TEXT NOT NULL, imagem TEXT, lingua TEXT NOT NULL DEFAULT 'Inglês', erros INTEGER DEFAULT 0, oculto INTEGER DEFAULT 0)''',
         );
         await db.execute('''CREATE TABLE configuracoes (chave TEXT PRIMARY KEY, valor TEXT)''');
         await db.execute(
-          '''CREATE TABLE estatisticas (data TEXT PRIMARY KEY, respondidas INTEGER DEFAULT 0, acertos INTEGER DEFAULT 0, erros INTEGER DEFAULT 0, especiais INTEGER DEFAULT 0, tempo_papagaio INTEGER DEFAULT 0)''',
+          '''CREATE TABLE estatisticas (data TEXT PRIMARY KEY, respondidas INTEGER DEFAULT 0, acertos INTEGER DEFAULT 0, erros INTEGER DEFAULT 0, especiais INTEGER DEFAULT 0, tempo_papagaio INTEGER DEFAULT 0, registradas INTEGER DEFAULT 0)''',
         );
         await db.execute(
-          '''CREATE TABLE estatisticas_mensais (mes TEXT PRIMARY KEY, respondidas INTEGER DEFAULT 0, acertos INTEGER DEFAULT 0, erros INTEGER DEFAULT 0, especiais INTEGER DEFAULT 0, tempo_papagaio INTEGER DEFAULT 0)''',
+          '''CREATE TABLE estatisticas_mensais (mes TEXT PRIMARY KEY, respondidas INTEGER DEFAULT 0, acertos INTEGER DEFAULT 0, erros INTEGER DEFAULT 0, especiais INTEGER DEFAULT 0, tempo_papagaio INTEGER DEFAULT 0, registradas INTEGER DEFAULT 0)''',
+        );
+        await db.execute(
+          '''CREATE TABLE notificacoes (id INTEGER PRIMARY KEY AUTOINCREMENT, titulo TEXT NOT NULL, mensagem TEXT NOT NULL, data_hora TEXT NOT NULL, tipo TEXT NOT NULL DEFAULT 'lembrete', lida INTEGER DEFAULT 0)''',
         );
 
         await db.insert('configuracoes', {'chave': 'filtro', 'valor': 'todas'});
@@ -156,6 +159,16 @@ class DatabaseHelper {
         await db.insert('configuracoes', {'chave': 'treino_inteligente', 'valor': 'false'});
         await db.insert('configuracoes', {'chave': 'avanco_automatico', 'valor': 'false'});
         await db.insert('configuracoes', {'chave': 'temas_livres', 'valor': ''});
+
+        // Configurações de Tutorial (abre apenas na 1ª vez) e Lembretes/Notificações
+        await db.insert('configuracoes', {'chave': 'tutorial_inicial_concluido', 'valor': 'false'});
+        await db.insert('configuracoes', {'chave': 'notificacoes_silenciadas', 'valor': 'false'});
+        await db.insert('configuracoes', {'chave': 'lembrete_ativo', 'valor': 'false'});
+        await db.insert('configuracoes', {'chave': 'lembrete_dias', 'valor': '1,2,3,4,5'});
+        await db.insert('configuracoes', {'chave': 'lembrete_horario', 'valor': '19:00'});
+        await db.insert('configuracoes', {'chave': 'ultimo_lembrete_data', 'valor': ''});
+        await db.insert('configuracoes', {'chave': 'ultimo_progresso_data', 'valor': ''});
+        await db.insert('configuracoes', {'chave': 'ultimo_progresso_assinatura', 'valor': ''});
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 3) {
@@ -165,10 +178,10 @@ class DatabaseHelper {
         }
         if (oldVersion < 6) {
           await db.execute(
-            '''CREATE TABLE IF NOT EXISTS estatisticas (data TEXT PRIMARY KEY, respondidas INTEGER DEFAULT 0, acertos INTEGER DEFAULT 0, erros INTEGER DEFAULT 0, especiais INTEGER DEFAULT 0, tempo_papagaio INTEGER DEFAULT 0)''',
+            '''CREATE TABLE IF NOT EXISTS estatisticas (data TEXT PRIMARY KEY, respondidas INTEGER DEFAULT 0, acertos INTEGER DEFAULT 0, erros INTEGER DEFAULT 0, especiais INTEGER DEFAULT 0, tempo_papagaio INTEGER DEFAULT 0, registradas INTEGER DEFAULT 0)''',
           );
           await db.execute(
-            '''CREATE TABLE IF NOT EXISTS estatisticas_mensais (mes TEXT PRIMARY KEY, respondidas INTEGER DEFAULT 0, acertos INTEGER DEFAULT 0, erros INTEGER DEFAULT 0, especiais INTEGER DEFAULT 0, tempo_papagaio INTEGER DEFAULT 0)''',
+            '''CREATE TABLE IF NOT EXISTS estatisticas_mensais (mes TEXT PRIMARY KEY, respondidas INTEGER DEFAULT 0, acertos INTEGER DEFAULT 0, erros INTEGER DEFAULT 0, especiais INTEGER DEFAULT 0, tempo_papagaio INTEGER DEFAULT 0, registradas INTEGER DEFAULT 0)''',
           );
         }
         if (oldVersion < 8) {
@@ -200,8 +213,102 @@ class DatabaseHelper {
             conflictAlgorithm: ConflictAlgorithm.replace,
           );
         }
+        if (oldVersion < 13) {
+          try {
+            await db.execute("ALTER TABLE estatisticas ADD COLUMN registradas INTEGER DEFAULT 0");
+          } catch (_) {}
+          try {
+            await db.execute("ALTER TABLE estatisticas_mensais ADD COLUMN registradas INTEGER DEFAULT 0");
+          } catch (_) {}
+          await db.execute(
+            '''CREATE TABLE IF NOT EXISTS notificacoes (id INTEGER PRIMARY KEY AUTOINCREMENT, titulo TEXT NOT NULL, mensagem TEXT NOT NULL, data_hora TEXT NOT NULL, tipo TEXT NOT NULL DEFAULT 'lembrete', lida INTEGER DEFAULT 0)''',
+          );
+          await db.insert(
+            'configuracoes',
+            {'chave': 'tutorial_inicial_concluido', 'valor': 'false'},
+            conflictAlgorithm: ConflictAlgorithm.ignore,
+          );
+          await db.insert(
+            'configuracoes',
+            {'chave': 'notificacoes_silenciadas', 'valor': 'false'},
+            conflictAlgorithm: ConflictAlgorithm.ignore,
+          );
+          await db.insert(
+            'configuracoes',
+            {'chave': 'lembrete_ativo', 'valor': 'false'},
+            conflictAlgorithm: ConflictAlgorithm.ignore,
+          );
+          await db.insert(
+            'configuracoes',
+            {'chave': 'lembrete_dias', 'valor': '1,2,3,4,5'},
+            conflictAlgorithm: ConflictAlgorithm.ignore,
+          );
+          await db.insert(
+            'configuracoes',
+            {'chave': 'lembrete_horario', 'valor': '19:00'},
+            conflictAlgorithm: ConflictAlgorithm.ignore,
+          );
+          await db.insert(
+            'configuracoes',
+            {'chave': 'ultimo_lembrete_data', 'valor': ''},
+            conflictAlgorithm: ConflictAlgorithm.ignore,
+          );
+          await db.insert(
+            'configuracoes',
+            {'chave': 'ultimo_progresso_data', 'valor': ''},
+            conflictAlgorithm: ConflictAlgorithm.ignore,
+          );
+          await db.insert(
+            'configuracoes',
+            {'chave': 'ultimo_progresso_assinatura', 'valor': ''},
+            conflictAlgorithm: ConflictAlgorithm.ignore,
+          );
+        }
       },
     );
+  }
+
+  // ==========================================
+  // GESTÃO DE NOTIFICAÇÕES E LEMBRETES
+  // ==========================================
+  Future<int> inserirNotificacao({
+    required String titulo,
+    required String mensagem,
+    String tipo = 'lembrete',
+  }) async {
+    final db = await instance.database;
+    final String agora = DateTime.now().toIso8601String();
+    return await db.insert('notificacoes', {
+      'titulo': titulo,
+      'mensagem': mensagem,
+      'data_hora': agora,
+      'tipo': tipo,
+      'lida': 0,
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> listarNotificacoes() async {
+    final db = await instance.database;
+    return await db.query('notificacoes', orderBy: 'id DESC', limit: 50);
+  }
+
+  Future<int> contarNotificacoesNaoLidas() async {
+    final db = await instance.database;
+    final res = await db.rawQuery('SELECT COUNT(*) as total FROM notificacoes WHERE lida = 0');
+    if (res.isNotEmpty && res.first['total'] != null) {
+      return (res.first['total'] as num).toInt();
+    }
+    return 0;
+  }
+
+  Future<void> marcarTodasNotificacoesComoLidas() async {
+    final db = await instance.database;
+    await db.update('notificacoes', {'lida': 1}, where: 'lida = 0');
+  }
+
+  Future<void> limparNotificacoes() async {
+    final db = await instance.database;
+    await db.delete('notificacoes');
   }
 
   // ==========================================
@@ -379,18 +486,32 @@ class DatabaseHelper {
     final res = await db.query('estatisticas', where: 'data = ?', whereArgs: [hoje]);
     return res.isNotEmpty
         ? res.first
-        : {'respondidas': 0, 'acertos': 0, 'erros': 0, 'especiais': 0, 'tempo_papagaio': 0};
+        : {
+      'respondidas': 0,
+      'acertos': 0,
+      'erros': 0,
+      'especiais': 0,
+      'tempo_papagaio': 0,
+      'registradas': 0,
+    };
   }
 
   Future<Map<String, dynamic>> getEstatisticasSemana() async {
     final db = await instance.database;
     String limite = DateTime.now().subtract(const Duration(days: 7)).toIso8601String().substring(0, 10);
     final res = await db.rawQuery(
-      '''SELECT SUM(respondidas) as respondidas, SUM(acertos) as acertos, SUM(erros) as erros, SUM(especiais) as especiais, SUM(tempo_papagaio) as tempo_papagaio FROM estatisticas WHERE data >= ?''',
+      '''SELECT SUM(respondidas) as respondidas, SUM(acertos) as acertos, SUM(erros) as erros, SUM(especiais) as especiais, SUM(tempo_papagaio) as tempo_papagaio, SUM(registradas) as registradas FROM estatisticas WHERE data >= ?''',
       [limite],
     );
     if (res.isNotEmpty && res.first['respondidas'] != null) return res.first;
-    return {'respondidas': 0, 'acertos': 0, 'erros': 0, 'especiais': 0, 'tempo_papagaio': 0};
+    return {
+      'respondidas': 0,
+      'acertos': 0,
+      'erros': 0,
+      'especiais': 0,
+      'tempo_papagaio': 0,
+      'registradas': 0,
+    };
   }
 
   Future<List<Map<String, dynamic>>> getHistoricoMensal() async {

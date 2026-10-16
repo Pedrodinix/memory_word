@@ -4,6 +4,7 @@ import 'banco_de_dados/database_helper.dart';
 import 'telas/tela_registro.dart';
 import 'telas/tela_pratica.dart';
 import 'telas/tela_biblioteca.dart';
+import 'telas/tela_tutorial.dart';
 
 // ==========================================
 // CONFIGURAÇÕES GLOBAIS E TRADUÇÃO DO APP
@@ -39,6 +40,10 @@ final ValueNotifier<bool> appTreinoInteligente = ValueNotifier(false);
 final ValueNotifier<bool> appAutoNext = ValueNotifier(false);
 final ValueNotifier<int> appDataVersion = ValueNotifier(0);
 final ValueNotifier<int?> appNavigateToTab = ValueNotifier<int?>(null);
+final ValueNotifier<int?> appNavigateToPracticePage = ValueNotifier<int?>(null);
+final ValueNotifier<bool> appTutorialConcluido = ValueNotifier(true);
+final ValueNotifier<String?> appActiveTutorialSection = ValueNotifier<String?>(null);
+final ValueNotifier<int> appNotifCount = ValueNotifier(0);
 
 // Helpers para identificar se o usuário está estudando um Idioma ou um Tema Livre
 bool isCustomStudy(String langKey) => langKey.startsWith('tema:');
@@ -63,6 +68,7 @@ Future<void> carregarConfiguracoesGlobaisDoBanco() async {
   String feedbackSalvo = await db.getConfig('feedback_ativo');
   String treinoSalvo = await db.getConfig('treino_inteligente');
   String autoNextSalvo = await db.getConfig('avanco_automatico');
+  String tutorialSalvo = await db.getConfig('tutorial_inicial_concluido');
 
   appThemeMode.value = (temaSalvo == 'dark') ? ThemeMode.dark : ThemeMode.light;
   if (idiomaSalvo.isNotEmpty && (supportedLanguages.containsKey(idiomaSalvo) || isCustomStudy(idiomaSalvo))) {
@@ -79,6 +85,11 @@ Future<void> carregarConfiguracoesGlobaisDoBanco() async {
   }
   // Por padrão vem desligado (false), só ativa se estiver explicitamente salvo como 'true'
   appAutoNext.value = (autoNextSalvo == 'true');
+  appTutorialConcluido.value = (tutorialSalvo == 'true');
+
+  int naoLidas = await db.contarNotificacoesNaoLidas();
+  appNotifCount.value = naoLidas;
+
   appDataVersion.value++;
 }
 
@@ -261,7 +272,7 @@ String t(String text) {
     },
     'Som e Vibração': {
       'en': 'Sound & Vibration', 'de': 'Ton & Vibration', 'es': 'Sonido y Vibración', 'fr': 'Son et Vibration',
-      'it': 'Suono e Vibrazione', 'ru': 'Звук и вибрация', 'ja': 'サウンドと振動', 'zh-cn': '声音与振动',
+      'it': 'Suono e Vibrazione', 'ru': 'Звук e вибрация', 'ja': 'サウンドと振動', 'zh-cn': '声音与振动',
       'ko': '소리 및 진동', 'hi': 'ध्वनि और कंपन', 'ar': 'الصوت والاهتزاز'
     },
     'Sorteio Automático após Responder': {
@@ -570,7 +581,7 @@ String t(String text) {
       'en': 'Will appear normally in the Library and Parrot Mode.',
       'de': 'Erscheint normal in der Bibliothek und im Papageienmodus.',
       'es': 'Aparecerá normalmente en la Biblioteca y en el Modo Loro.',
-      'fr': 'Apparaîtra normalmente dans la Bibliothèque et le Mode Perroquet.',
+      'fr': 'Apparaîtra normalement dans la Bibliothèque et le Mode Perroquet.',
       'it': 'Apparirà normalmente nella Libreria e nella Modalità Pappagallo.',
       'ru': 'Будет отображаться в библиотеке и озвучиваться в режиме Попугая.',
       'ja': 'ライブラリやオウムモードに通常通り表示されます。',
@@ -630,7 +641,7 @@ String t(String text) {
       'ko': '단어 뽑기', 'hi': 'शब्द चुनें', 'ar': 'سحب كلمة'
     },
     'Sortear Objeto de Estudo': {
-      'en': 'Draw Study Object', 'de': 'Lernobjekt ziehen', 'es': 'Sortear Objeto de Estudio', 'fr': 'Tirer un objet d\'étude',
+      'en': 'Draw Study Object', 'de': 'Lernobjekt ziehen', 'es': 'Sortear Objeto de Estudo', 'fr': 'Tirer un objet d\'étude',
       'it': 'Estrai Oggetto di Studio', 'ru': 'Выбрать объект изучения', 'ja': '学習項目を引く', 'zh-cn': '抽取学习对象',
       'ko': '학습 항목 뽑기', 'hi': 'अध्ययन वस्तु चुनें', 'ar': 'سحب عنصر دراسة'
     },
@@ -650,7 +661,7 @@ String t(String text) {
       'ko': '설명 입력', 'hi': 'आपकी व्याख्या', 'ar': 'شرحك'
     },
     'Qual é o Objeto de Estudo?': {
-      'en': 'What is the Study Object?', 'de': 'Was ist das Lernobjekt?', 'es': '¿Cuál es el Objeto de Estudio?', 'fr': "Quel est l'objet d'étude ?",
+      'en': 'What is the Study Object?', 'de': 'Was ist das Lernobjekt?', 'es': '¿Cuál es el Objeto de Estudo?', 'fr': "Quel est l'objet d'étude ?",
       'it': 'Qual è l\'Oggetto di Studio?', 'ru': 'Что это за объект изучения?', 'ja': '学習対象は何ですか？', 'zh-cn': '对应的学习对象是什么？',
       'ko': '학습 대상은 무엇입니까?', 'hi': 'अध्ययन वस्तु क्या है?', 'ar': 'ما هو عنصر الدراسة؟'
     },
@@ -1205,10 +1216,48 @@ class MemoryWordApp extends StatelessWidget {
                   child: widgetChild ?? const SizedBox.shrink(),
                 );
               },
-              home: const MainScreen(),
+              home: const AppRootController(),
             );
           },
         );
+      },
+    );
+  }
+}
+
+class AppRootController extends StatefulWidget {
+  const AppRootController({super.key});
+
+  @override
+  State<AppRootController> createState() => _AppRootControllerState();
+}
+
+class _AppRootControllerState extends State<AppRootController> {
+  @override
+  void initState() {
+    super.initState();
+    _verificarBackgroundTasks();
+  }
+
+  Future<void> _verificarBackgroundTasks() async {
+    await verificarEProcessarNotificacoesBackground(context);
+    final int naoLidas = await DatabaseHelper.instance.contarNotificacoesNaoLidas();
+    if (mounted) appNotifCount.value = naoLidas;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: appTutorialConcluido,
+      builder: (context, concluido, child) {
+        if (!concluido) {
+          return TelaTutorialInicial(
+            onConcluido: () {
+              appTutorialConcluido.value = true;
+            },
+          );
+        }
+        return const MainScreen();
       },
     );
   }
@@ -1264,74 +1313,135 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
+  void _abrirNotificacoes() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const TelaNotificacoes()),
+    );
+    final int naoLidas = await DatabaseHelper.instance.contarNotificacoesNaoLidas();
+    appNotifCount.value = naoLidas;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        leading: ValueListenableBuilder<String>(
-          valueListenable: appLanguage,
-          builder: (context, lang, child) {
-            return Center(
-              child: Text(getStudyFlagOrIcon(lang), style: const TextStyle(fontSize: 26)),
+    return Stack(
+      children: [
+        Scaffold(
+          appBar: AppBar(
+            leading: ValueListenableBuilder<String>(
+              valueListenable: appLanguage,
+              builder: (context, lang, child) {
+                return Center(
+                  child: Text(getStudyFlagOrIcon(lang), style: const TextStyle(fontSize: 26)),
+                );
+              },
+            ),
+            title: ValueListenableBuilder<String>(
+              valueListenable: appLanguage,
+              builder: (context, lang, child) {
+                if (isCustomStudy(lang)) {
+                  return Text(
+                    getStudyDisplayName(lang),
+                    overflow: TextOverflow.ellipsis,
+                  );
+                }
+                return const Text('MemoryWord');
+              },
+            ),
+            centerTitle: true,
+            actions: [
+              // Sino de Notificações com Badge de Contagem
+              ValueListenableBuilder<int>(
+                valueListenable: appNotifCount,
+                builder: (context, count, child) {
+                  return Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.notifications_outlined),
+                        tooltip: 'Notificações',
+                        onPressed: _abrirNotificacoes,
+                      ),
+                      if (count > 0)
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                            constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                            child: Text(
+                              '$count',
+                              style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.settings),
+                tooltip: t("Configurações"),
+                onPressed: _abrirConfiguracoes,
+              ),
+            ],
+          ),
+          body: ValueListenableBuilder<int>(
+            valueListenable: appDataVersion,
+            builder: (context, dataVer, child) {
+              return ValueListenableBuilder<String>(
+                valueListenable: appLanguage,
+                builder: (context, currentLang, child) {
+                  return PageView(
+                    key: ValueKey('pageview_$dataVer'),
+                    controller: _mainPageController,
+                    onPageChanged: (index) => setState(() => _currentIndex = index),
+                    children: [
+                      RegisterTab(currentLang: currentLang),
+                      PracticeTab(currentLang: currentLang),
+                      LibraryTab(currentLang: currentLang),
+                    ],
+                  );
+                },
+              );
+            },
+          ),
+          bottomNavigationBar: BottomNavigationBar(
+            currentIndex: _currentIndex,
+            onTap: (index) {
+              _mainPageController.animateToPage(
+                index,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+              );
+            },
+            items: [
+              BottomNavigationBarItem(icon: const Icon(Icons.add), label: t('Novo')),
+              BottomNavigationBarItem(icon: const Icon(Icons.quiz), label: t('Praticar')),
+              BottomNavigationBarItem(icon: const Icon(Icons.library_books), label: t('Biblioteca')),
+            ],
+          ),
+        ),
+
+        // Overlay Interativo do Tutorial Guiado Passo a Passo
+        ValueListenableBuilder<String?>(
+          valueListenable: appActiveTutorialSection,
+          builder: (context, activeSec, child) {
+            if (activeSec == null || activeSec.isEmpty) {
+              return const SizedBox.shrink();
+            }
+            return TutorialGuiadoOverlay(
+              key: ValueKey('tutorial_overlay_$activeSec'),
+              section: activeSec,
+              onClose: () {
+                appActiveTutorialSection.value = null;
+              },
             );
           },
         ),
-        title: ValueListenableBuilder<String>(
-          valueListenable: appLanguage,
-          builder: (context, lang, child) {
-            if (isCustomStudy(lang)) {
-              return Text(
-                getStudyDisplayName(lang),
-                overflow: TextOverflow.ellipsis,
-              );
-            }
-            return const Text('MemoryWord');
-          },
-        ),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings),
-            tooltip: t("Configurações"),
-            onPressed: _abrirConfiguracoes,
-          )
-        ],
-      ),
-      body: ValueListenableBuilder<int>(
-        valueListenable: appDataVersion,
-        builder: (context, dataVer, child) {
-          return ValueListenableBuilder<String>(
-            valueListenable: appLanguage,
-            builder: (context, currentLang, child) {
-              return PageView(
-                key: ValueKey('pageview_$dataVer'),
-                controller: _mainPageController,
-                onPageChanged: (index) => setState(() => _currentIndex = index),
-                children: [
-                  RegisterTab(currentLang: currentLang),
-                  PracticeTab(currentLang: currentLang),
-                  LibraryTab(currentLang: currentLang),
-                ],
-              );
-            },
-          );
-        },
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (index) {
-          _mainPageController.animateToPage(
-            index,
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeInOut,
-          );
-        },
-        items: [
-          BottomNavigationBarItem(icon: const Icon(Icons.add), label: t('Novo')),
-          BottomNavigationBarItem(icon: const Icon(Icons.quiz), label: t('Praticar')),
-          BottomNavigationBarItem(icon: const Icon(Icons.library_books), label: t('Biblioteca')),
-        ],
-      ),
+      ],
     );
   }
 }
@@ -1403,7 +1513,6 @@ class _SettingsSheetState extends State<SettingsSheet> {
 
       _idiomaNativoSelecionado = supportedLanguages.containsKey(idiomaNativo) ? idiomaNativo : 'Português';
       _isFeedbackEnabled = (feedback.isEmpty || feedback == 'true');
-      // Por padrão fica desligado (false) a menos que esteja salvo como 'true'
       _isAutoNext = (autoNext == 'true');
     });
   }
@@ -1637,7 +1746,22 @@ class _SettingsSheetState extends State<SettingsSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(t("Categoria de Estudo"), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(t("Categoria de Estudo"), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  TextButton.icon(
+                    icon: const Icon(Icons.help_outline, size: 18),
+                    label: const Text('Ver Tutoriais'),
+                    onPressed: () {
+                      showDialog(
+                        context: context,
+                        builder: (_) => DialogoTutorialAbas(parentSheetContext: context),
+                      );
+                    },
+                  ),
+                ],
+              ),
               const SizedBox(height: 10),
               SizedBox(
                 width: double.infinity,
@@ -1660,8 +1784,7 @@ class _SettingsSheetState extends State<SettingsSheet> {
                     setState(() {
                       _modoTemaLivre = isFree;
                       if (isFree) {
-                        // Desativa por padrão o sorteio automático ao mudar para Estudo Livre
-                        _isAutoNext = false;
+                        _isAutoNext = false; // Desativa por padrão no estudo livre
                       }
                     });
                     if (isFree && _temasLivres.isEmpty) {
@@ -1788,6 +1911,9 @@ class _SettingsSheetState extends State<SettingsSheet> {
                   }
                 },
               ),
+
+              // Widget de Lembretes e Notificações nas Configurações
+              const LembreteConfigWidget(),
 
               const Divider(height: 30),
               Text(t("Filtro de Sorteio (Global)"), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),

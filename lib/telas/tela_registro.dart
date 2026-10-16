@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:translator/translator.dart' as tr;
-import 'package:flutter_tts/flutter_tts.dart';
+import 'package:translator/translator.dart';
 import 'dart:io';
 
 import '../main.dart';
 import '../banco_de_dados/database_helper.dart';
+import 'tela_tutorial.dart';
 
 class RegisterTab extends StatefulWidget {
   final String currentLang;
@@ -18,10 +18,10 @@ class RegisterTab extends StatefulWidget {
 class _RegisterTabState extends State<RegisterTab> {
   final _inglesCtrl = TextEditingController();
   final _traducaoCtrl = TextEditingController();
-  String? _savedImageFileName;
-  bool _isTranslating = false;
+  String? _imagePath;
   final ImagePicker _picker = ImagePicker();
-  final FlutterTts _flutterTts = FlutterTts();
+  final GoogleTranslator _translator = GoogleTranslator();
+  bool _isTranslating = false;
 
   bool get _isFreeStudy => isCustomStudy(widget.currentLang);
   String get _displayTopic => getStudyDisplayName(widget.currentLang);
@@ -30,35 +30,36 @@ class _RegisterTabState extends State<RegisterTab> {
   void dispose() {
     _inglesCtrl.dispose();
     _traducaoCtrl.dispose();
-    _flutterTts.stop();
     super.dispose();
   }
 
-  Future<void> _falar(String texto) async {
-    if (texto.isEmpty) return;
-    AppLanguage langData = _isFreeStudy
-        ? (supportedLanguages[appNativeLanguage.value] ?? supportedLanguages['Português']!)
-        : (supportedLanguages[widget.currentLang] ?? supportedLanguages['Inglês']!);
-    await _flutterTts.setLanguage(langData.ttsCode);
-    await _flutterTts.speak(texto);
-  }
-
-  Future<void> _translateWord() async {
+  Future<void> _autoTraduzir() async {
     if (_isFreeStudy || _inglesCtrl.text.trim().isEmpty) return;
+
     setState(() => _isTranslating = true);
     try {
-      AppLanguage langData = supportedLanguages[widget.currentLang]!;
-      final translator = tr.GoogleTranslator();
-      String targetLangCode = supportedLanguages[appNativeLanguage.value]!.transCode;
-      final translation = await translator.translate(
-        _inglesCtrl.text.trim(),
-        from: langData.transCode,
-        to: targetLangCode,
-      );
+      String fromCode = supportedLanguages[widget.currentLang]?.transCode ?? 'en';
+      String toCode = supportedLanguages[appNativeLanguage.value]?.transCode ?? 'pt';
+
+      if (fromCode == toCode) {
+        if (mounted) setState(() => _isTranslating = false);
+        return;
+      }
+
+      var translation = await _translator
+          .translate(_inglesCtrl.text.trim(), from: fromCode, to: toCode)
+          .timeout(const Duration(seconds: 8));
       if (!mounted) return;
-      setState(() => _traducaoCtrl.text = translation.text);
-    } catch (_) {}
-    if (mounted) setState(() => _isTranslating = false);
+      setState(() {
+        _traducaoCtrl.text = translation.text;
+      });
+    } catch (_) {
+      // Se estiver offline, o utilizador pode digitar manualmente sem bloqueios
+    } finally {
+      if (mounted) {
+        setState(() => _isTranslating = false);
+      }
+    }
   }
 
   Future<void> _pickImage(ImageSource source) async {
@@ -69,14 +70,17 @@ class _RegisterTabState extends State<RegisterTab> {
       imageQuality: 80,
     );
     if (pickedFile != null) {
-      final String fileName = await DatabaseHelper.instance.saveImageToAppDirectory(pickedFile.path);
+      final String savedFileName = await DatabaseHelper.instance.saveImageToAppDirectory(pickedFile.path);
       if (!mounted) return;
-      setState(() => _savedImageFileName = fileName);
+      setState(() => _imagePath = savedFileName);
     }
   }
 
   Future<void> _saveWord() async {
-    if (_inglesCtrl.text.trim().isEmpty || _traducaoCtrl.text.trim().isEmpty) {
+    final inglesText = _inglesCtrl.text.trim();
+    final traducaoText = _traducaoCtrl.text.trim();
+
+    if (inglesText.isEmpty || traducaoText.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -84,16 +88,21 @@ class _RegisterTabState extends State<RegisterTab> {
                 ? t('Preencha o objeto de estudo e a explicação antes de salvar.')
                 : t('Preencha a palavra e a tradução antes de salvar.'),
           ),
+          backgroundColor: Colors.red.shade700,
         ),
       );
       return;
     }
+
     try {
       final db = DatabaseHelper.instance;
-      final ex = await db.fetchMeanings(_inglesCtrl.text.trim(), widget.currentLang);
-      if (ex.isNotEmpty) {
+      final existing = await db.fetchMeanings(inglesText, widget.currentLang);
+      int errosExistentes = 0;
+
+      if (existing.isNotEmpty) {
+        errosExistentes = existing.first['erros'] ?? 0;
         if (!mounted) return;
-        bool? addAnother = await showDialog<bool>(
+        bool? confirm = await showDialog<bool>(
           context: context,
           builder: (c) => AlertDialog(
             title: Text(_isFreeStudy ? t("Objeto Existente") : t("Palavra Existente")),
@@ -108,84 +117,90 @@ class _RegisterTabState extends State<RegisterTab> {
             ],
           ),
         );
-        if (addAnother != true) return;
+        if (confirm != true) return;
       }
+
       await db.insertWord({
-        'ingles': _inglesCtrl.text.trim(),
-        'traducao': _traducaoCtrl.text.trim(),
-        'imagem': _savedImageFileName ?? '',
+        'ingles': inglesText,
+        'traducao': traducaoText,
+        'imagem': _imagePath ?? '',
         'lingua': widget.currentLang,
+        'erros': errosExistentes,
+        'oculto': 0,
       });
+
+      // Contabiliza o novo item registrado hoje e agenda a notificação de progresso
+      await db.registrarAtividade('registradas', 1);
+      agendarVerificacaoDeProgressoRecente();
+
+      _inglesCtrl.clear();
+      _traducaoCtrl.clear();
+      setState(() => _imagePath = null);
       if (!mounted) return;
+      FocusScope.of(context).unfocus();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(_isFreeStudy ? t('Objeto de estudo salvo com sucesso!') : t('Palavra salva com sucesso!')),
-          backgroundColor: Colors.green,
+          content: Text(
+            _isFreeStudy ? t('Objeto de estudo salvo com sucesso!') : t('Palavra salva com sucesso!'),
+          ),
         ),
       );
-      setState(() {
-        _inglesCtrl.clear();
-        _traducaoCtrl.clear();
-        _savedImageFileName = null;
-      });
     } catch (_) {}
   }
 
   @override
   Widget build(BuildContext context) {
-    final File? previewFile = DatabaseHelper.instance.getImageFile(_savedImageFileName);
+    final File? previewFile = DatabaseHelper.instance.getImageFile(_imagePath);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20.0),
       child: Column(
         children: [
           Text(
-            _isFreeStudy ? "${t('Registrar Objeto de Estudo')} ($_displayTopic)" : t("Registrar Palavra"),
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            _isFreeStudy
+                ? "${t('Registrar Objeto de Estudo')} ($_displayTopic)"
+                : "${t('Registrar Palavra')} ($_displayTopic)",
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 15),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _inglesCtrl,
-                  textInputAction: TextInputAction.next,
-                  decoration: InputDecoration(
-                    labelText: _isFreeStudy
-                        ? t('Objeto de Estudo / Conceito')
-                        : "${t('Palavra em')} $_displayTopic",
-                    border: const OutlineInputBorder(),
-                  ),
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.volume_up, color: Colors.blue),
-                tooltip: t("Falar"),
-                onPressed: () => _falar(_inglesCtrl.text.trim()),
-              ),
-              if (!_isFreeStudy)
-                IconButton(
-                  icon: _isTranslating
-                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.g_translate, color: Colors.blue),
-                  onPressed: _translateWord,
-                ),
-            ],
+          TextField(
+            controller: _inglesCtrl,
+            decoration: InputDecoration(
+              labelText: _isFreeStudy
+                  ? t('Objeto de Estudo / Conceito')
+                  : "${t('Palavra em')} $_displayTopic",
+              border: const OutlineInputBorder(),
+              suffixIcon: _isFreeStudy
+                  ? null
+                  : (_isTranslating
+                  ? const Padding(
+                padding: EdgeInsets.all(12),
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+                  : IconButton(
+                icon: const Icon(Icons.g_translate, color: Colors.blue),
+                tooltip: t("Significado / Tradução"),
+                onPressed: _autoTraduzir,
+              )),
+            ),
+            onSubmitted: (_) {
+              if (!_isFreeStudy) _autoTraduzir();
+            },
           ),
           const SizedBox(height: 15),
           TextField(
             controller: _traducaoCtrl,
             maxLines: _isFreeStudy ? 3 : 1,
             minLines: 1,
-            textInputAction: TextInputAction.done,
-            onSubmitted: (_) => _saveWord(),
             decoration: InputDecoration(
-              labelText: _isFreeStudy ? t('Explicação / Definição') : t('Significado / Tradução'),
+              labelText: _isFreeStudy
+                  ? t('Explicação / Definição')
+                  : "${t('Significado / Tradução')} (${t(appNativeLanguage.value)})",
               border: const OutlineInputBorder(),
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 15),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
@@ -201,18 +216,16 @@ class _RegisterTabState extends State<RegisterTab> {
               ),
             ],
           ),
-          const SizedBox(height: 20),
           if (previewFile != null) ...[
-            Image.file(previewFile, height: 150, fit: BoxFit.cover),
+            const SizedBox(height: 15),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.file(previewFile, height: 150, fit: BoxFit.contain),
+            ),
             TextButton.icon(
               icon: const Icon(Icons.delete, color: Colors.red),
-              label: Text(t('Remover Foto'), style: const TextStyle(color: Colors.red)),
-              onPressed: () async {
-                try {
-                  if (await previewFile.exists()) await previewFile.delete();
-                } catch (_) {}
-                if (mounted) setState(() => _savedImageFileName = null);
-              },
+              label: Text(t("Remover Foto"), style: const TextStyle(color: Colors.red)),
+              onPressed: () => setState(() => _imagePath = null),
             ),
           ],
           const SizedBox(height: 20),
@@ -221,7 +234,7 @@ class _RegisterTabState extends State<RegisterTab> {
             height: 50,
             child: FilledButton(
               onPressed: _saveWord,
-              child: Text(t('Confirmar'), style: const TextStyle(fontSize: 18)),
+              child: Text(t('Confirmar')),
             ),
           ),
         ],
