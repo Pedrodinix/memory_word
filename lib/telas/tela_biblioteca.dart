@@ -81,7 +81,10 @@ class _LibraryTabState extends State<LibraryTab> {
                 ),
               ),
               const SizedBox(width: 8),
-              Text("($_totalWordsCount ${t('registradas')})", style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              Text(
+                "($_totalWordsCount ${t('registradas')})",
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
             ],
           ),
           const SizedBox(height: 10),
@@ -155,7 +158,7 @@ class WordDetailsScreen extends StatefulWidget {
 }
 
 class _WordDetailsScreenState extends State<WordDetailsScreen> {
-  List<Map<String, dynamic>> _meanings = [];
+  List<Map<String, dynamic>> _allMeanings = [];
 
   bool get _isFreeStudy => isCustomStudy(widget.currentLang);
 
@@ -168,14 +171,18 @@ class _WordDetailsScreenState extends State<WordDetailsScreen> {
   Future<void> _loadMeanings() async {
     final res = await DatabaseHelper.instance.fetchMeanings(widget.ingles, widget.currentLang);
     if (!mounted) return;
-    setState(() => _meanings = res);
+    setState(() => _allMeanings = res);
   }
 
   void _irParaEdicao() async {
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => EditWordScreen(ingles: widget.ingles, meanings: _meanings, currentLang: widget.currentLang),
+        builder: (context) => EditWordScreen(
+          ingles: widget.ingles,
+          meanings: _allMeanings,
+          currentLang: widget.currentLang,
+        ),
       ),
     );
     final res = await DatabaseHelper.instance.fetchMeanings(widget.ingles, widget.currentLang);
@@ -183,13 +190,14 @@ class _WordDetailsScreenState extends State<WordDetailsScreen> {
     if (res.isEmpty) {
       Navigator.pop(context);
     } else {
-      setState(() => _meanings = res);
+      setState(() => _allMeanings = res);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    int erros = _meanings.isNotEmpty ? (_meanings[0]['erros'] ?? 0) : 0;
+    final visibleMeanings = _allMeanings.where((m) => (m['oculto'] ?? 0) == 0).toList();
+    int erros = _allMeanings.isNotEmpty ? (_allMeanings[0]['erros'] ?? 0) : 0;
     Color difColor = erros >= 5 ? Colors.red : (erros >= 3 ? Colors.amber : Colors.green);
     String difText = erros >= 5 ? t("Ruim (Vermelho)") : (erros >= 3 ? t("Médio (Amarelo)") : t("Bom (Verde)"));
     String labelItem = _isFreeStudy ? t('Explicação') : t('Significado');
@@ -229,10 +237,10 @@ class _WordDetailsScreenState extends State<WordDetailsScreen> {
           Expanded(
             child: ListView.separated(
               padding: const EdgeInsets.all(20),
-              itemCount: _meanings.length,
+              itemCount: visibleMeanings.length,
               separatorBuilder: (_, _) => const Divider(height: 40),
               itemBuilder: (context, index) {
-                final sig = _meanings[index];
+                final sig = visibleMeanings[index];
                 final File? imgFile = DatabaseHelper.instance.getImageFile(sig['imagem']?.toString());
 
                 return Column(
@@ -279,6 +287,7 @@ class _EditWordScreenState extends State<EditWordScreen> {
   final List<Map<String, dynamic>> _editMeanings = [];
   final ImagePicker _picker = ImagePicker();
   int _currentErrors = 0;
+  bool _showHiddenSection = false;
 
   bool get _isFreeStudy => isCustomStudy(widget.currentLang);
   String get _displayTopic => getStudyDisplayName(widget.currentLang);
@@ -291,10 +300,13 @@ class _EditWordScreenState extends State<EditWordScreen> {
       _currentErrors = widget.meanings[0]['erros'] ?? 0;
     }
     for (var m in widget.meanings) {
+      final int isOculto = (m['oculto'] == 1 || m['oculto'] == true) ? 1 : 0;
+      if (isOculto == 1) _showHiddenSection = true;
       _editMeanings.add({
         'id': m['id'],
         'traducao': TextEditingController(text: m['traducao']),
-        'imagem': m['imagem'],
+        'imagem': m['imagem'] ?? '',
+        'oculto': isOculto,
       });
     }
   }
@@ -308,9 +320,15 @@ class _EditWordScreenState extends State<EditWordScreen> {
     super.dispose();
   }
 
-  void _addSignificado() {
+  void _addSignificado({bool oculto = false}) {
     setState(() {
-      _editMeanings.add({'id': null, 'traducao': TextEditingController(), 'imagem': ''});
+      _editMeanings.add({
+        'id': null,
+        'traducao': TextEditingController(),
+        'imagem': '',
+        'oculto': oculto ? 1 : 0,
+      });
+      if (oculto) _showHiddenSection = true;
     });
   }
 
@@ -329,7 +347,10 @@ class _EditWordScreenState extends State<EditWordScreen> {
   }
 
   void _removerSignificado(int index) {
-    if (_editMeanings.length <= 1) return;
+    final bool isHidden = _editMeanings[index]['oculto'] == 1;
+    final int visibleCount = _editMeanings.where((m) => m['oculto'] != 1).length;
+    if (!isHidden && visibleCount <= 1) return;
+
     setState(() {
       (_editMeanings[index]['traducao'] as TextEditingController).dispose();
       _editMeanings.removeAt(index);
@@ -366,11 +387,11 @@ class _EditWordScreenState extends State<EditWordScreen> {
   }
 
   Future<void> _salvarAlteracoes() async {
-    final bool hasAtLeastOneMeaning = _editMeanings.any(
-          (m) => (m['traducao'] as TextEditingController).text.trim().isNotEmpty,
+    final bool hasAtLeastOneVisibleMeaning = _editMeanings.any(
+          (m) => m['oculto'] != 1 && (m['traducao'] as TextEditingController).text.trim().isNotEmpty,
     );
 
-    if (_inglesCtrl.text.trim().isEmpty || !hasAtLeastOneMeaning) {
+    if (_inglesCtrl.text.trim().isEmpty || !hasAtLeastOneVisibleMeaning) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -396,6 +417,7 @@ class _EditWordScreenState extends State<EditWordScreen> {
             'imagem': m['imagem'],
             'lingua': widget.currentLang,
             'erros': _currentErrors,
+            'oculto': m['oculto'] == 1 ? 1 : 0,
           });
         }
       }
@@ -408,9 +430,127 @@ class _EditWordScreenState extends State<EditWordScreen> {
     } catch (_) {}
   }
 
+  Widget _buildMeaningCard(int realIndex, int displayNum, String labelMeaning, {required bool isHidden}) {
+    final m = _editMeanings[realIndex];
+    final File? imgFile = DatabaseHelper.instance.getImageFile(m['imagem']?.toString());
+    final bool hasImg = imgFile != null;
+    final int visibleCount = _editMeanings.where((item) => item['oculto'] != 1).length;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      color: isHidden ? Colors.grey.withValues(alpha: 0.12) : null,
+      child: Padding(
+        padding: const EdgeInsets.all(10.0),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: m['traducao'],
+                    maxLines: _isFreeStudy ? 3 : 1,
+                    minLines: 1,
+                    decoration: InputDecoration(
+                      labelText: isHidden
+                          ? "${t('Oculto')} $displayNum"
+                          : "$labelMeaning $displayNum",
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(
+                    isHidden ? Icons.visibility_off : Icons.visibility,
+                    color: isHidden ? Colors.orange : Colors.blueGrey,
+                  ),
+                  tooltip: t('Significados Ocultos'),
+                  onPressed: () {
+                    if (!isHidden && visibleCount <= 1) return;
+                    setState(() {
+                      m['oculto'] = isHidden ? 0 : 1;
+                      if (m['oculto'] == 1) _showHiddenSection = true;
+                    });
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                  onPressed: () => _removerSignificado(realIndex),
+                ),
+              ],
+            ),
+            if (!isHidden) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  if (hasImg)
+                    Container(
+                      margin: const EdgeInsets.only(right: 10),
+                      child: Image.file(imgFile, width: 40, height: 40, fit: BoxFit.cover),
+                    ),
+                  TextButton.icon(
+                    icon: const Icon(Icons.image),
+                    label: Text(hasImg ? t("Alterar Foto") : t("Adicionar Foto")),
+                    onPressed: () {
+                      showModalBottomSheet(
+                        context: context,
+                        builder: (_) => SafeArea(
+                          child: Wrap(
+                            children: [
+                              ListTile(
+                                leading: const Icon(Icons.camera_alt),
+                                title: Text(t('Câmera')),
+                                onTap: () {
+                                  Navigator.pop(context);
+                                  _alterarFoto(realIndex, ImageSource.camera);
+                                },
+                              ),
+                              ListTile(
+                                leading: const Icon(Icons.photo_library),
+                                title: Text(t('Galeria')),
+                                onTap: () {
+                                  Navigator.pop(context);
+                                  _alterarFoto(realIndex, ImageSource.gallery);
+                                },
+                              ),
+                              if (hasImg)
+                                ListTile(
+                                  leading: const Icon(Icons.delete, color: Colors.red),
+                                  title: Text(
+                                    t('Remover Imagem'),
+                                    style: const TextStyle(color: Colors.red),
+                                  ),
+                                  onTap: () {
+                                    Navigator.pop(context);
+                                    setState(() => m['imagem'] = '');
+                                  },
+                                ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    String labelMeaning = _isFreeStudy ? t('Explicação') : t('Significado');
+    final String labelMeaning = _isFreeStudy ? t('Explicação') : t('Significado');
+    final List<int> visibleIndices = [];
+    final List<int> hiddenIndices = [];
+
+    for (int i = 0; i < _editMeanings.length; i++) {
+      if (_editMeanings[i]['oculto'] == 1) {
+        hiddenIndices.add(i);
+      } else {
+        visibleIndices.add(i);
+      }
+    }
 
     return Scaffold(
       appBar: AppBar(title: Text(_isFreeStudy ? t("Editar Objeto") : t("Editar Palavra"))),
@@ -434,102 +574,83 @@ class _EditWordScreenState extends State<EditWordScreen> {
               ),
               const SizedBox(height: 10),
               Expanded(
-                child: ListView.builder(
-                  itemCount: _editMeanings.length,
-                  itemBuilder: (context, index) {
-                    final m = _editMeanings[index];
-                    final File? imgFile = DatabaseHelper.instance.getImageFile(m['imagem']?.toString());
-                    final bool hasImg = imgFile != null;
-
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 15),
+                child: ListView(
+                  children: [
+                    for (int vIdx = 0; vIdx < visibleIndices.length; vIdx++)
+                      _buildMeaningCard(
+                        visibleIndices[vIdx],
+                        vIdx + 1,
+                        labelMeaning,
+                        isHidden: false,
+                      ),
+                    const SizedBox(height: 8),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () => setState(() => _showHiddenSection = !_showHiddenSection),
                       child: Padding(
-                        padding: const EdgeInsets.all(10.0),
-                        child: Column(
+                        padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Row(
                               children: [
-                                Expanded(
-                                  child: TextField(
-                                    controller: m['traducao'],
-                                    maxLines: _isFreeStudy ? 3 : 1,
-                                    minLines: 1,
-                                    decoration: InputDecoration(labelText: "$labelMeaning ${index + 1}"),
-                                  ),
+                                Icon(
+                                  _showHiddenSection ? Icons.visibility_off : Icons.visibility_off_outlined,
+                                  size: 20,
+                                  color: Colors.orange,
                                 ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete_outline, color: Colors.red),
-                                  onPressed: () => _removerSignificado(index),
+                                const SizedBox(width: 8),
+                                Text(
+                                  "${t('Significados Ocultos')} (${hiddenIndices.length})",
+                                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.orange),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 10),
-                            Row(
-                              children: [
-                                if (hasImg)
-                                  Container(
-                                    margin: const EdgeInsets.only(right: 10),
-                                    child: Image.file(imgFile, width: 40, height: 40, fit: BoxFit.cover),
-                                  ),
-                                TextButton.icon(
-                                  icon: const Icon(Icons.image),
-                                  label: Text(hasImg ? t("Alterar Foto") : t("Adicionar Foto")),
-                                  onPressed: () {
-                                    showModalBottomSheet(
-                                      context: context,
-                                      builder: (_) => SafeArea(
-                                        child: Wrap(
-                                          children: [
-                                            ListTile(
-                                              leading: const Icon(Icons.camera_alt),
-                                              title: Text(t('Câmera')),
-                                              onTap: () {
-                                                Navigator.pop(context);
-                                                _alterarFoto(index, ImageSource.camera);
-                                              },
-                                            ),
-                                            ListTile(
-                                              leading: const Icon(Icons.photo_library),
-                                              title: Text(t('Galeria')),
-                                              onTap: () {
-                                                Navigator.pop(context);
-                                                _alterarFoto(index, ImageSource.gallery);
-                                              },
-                                            ),
-                                            if (hasImg)
-                                              ListTile(
-                                                leading: const Icon(Icons.delete, color: Colors.red),
-                                                title: Text(
-                                                  t('Remover Imagem'),
-                                                  style: const TextStyle(color: Colors.red),
-                                                ),
-                                                onTap: () {
-                                                  Navigator.pop(context);
-                                                  setState(() => m['imagem'] = '');
-                                                },
-                                              ),
-                                          ],
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ],
+                            Icon(
+                              _showHiddenSection ? Icons.expand_less : Icons.expand_more,
+                              color: Colors.orange,
                             ),
                           ],
                         ),
                       ),
-                    );
-                  },
+                    ),
+                    if (_showHiddenSection) ...[
+                      if (hiddenIndices.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 10.0),
+                          child: Text(
+                            t('Nenhum significado oculto registrado.'),
+                            style: const TextStyle(color: Colors.grey, fontSize: 13),
+                            textAlign: TextAlign.center,
+                          ),
+                        )
+                      else
+                        for (int hIdx = 0; hIdx < hiddenIndices.length; hIdx++)
+                          _buildMeaningCard(
+                            hiddenIndices[hIdx],
+                            hIdx + 1,
+                            labelMeaning,
+                            isHidden: true,
+                          ),
+                    ],
+                  ],
                 ),
               ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   OutlinedButton.icon(
-                    onPressed: _addSignificado,
-                    icon: const Icon(Icons.add),
+                    onPressed: () => _addSignificado(oculto: false),
+                    icon: const Icon(Icons.add, size: 18),
                     label: Text(labelMeaning),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () => _addSignificado(oculto: true),
+                    icon: const Icon(Icons.visibility_off_outlined, size: 18, color: Colors.orange),
+                    label: Text(t("Adicionar Oculto")),
                   ),
                   TextButton.icon(
                     onPressed: _excluirPalavraToda,

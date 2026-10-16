@@ -30,8 +30,14 @@ class _PracticeTabState extends State<PracticeTab> {
 
   int _streak = 0;
   int _nextMilestone = 10;
+  int _streakBeforeLastError = 0;
+  int _milestoneBeforeLastError = 10;
   bool _showSpecialOverlay = false;
   int _overlayPoints = 0;
+
+  int _normalTimerToken = 0;
+  int _sharpTimerToken = 0;
+  int _imageTimerToken = 0;
 
   // --- MODO CLÁSSICO ---
   Map<String, dynamic>? _currentWordNormal;
@@ -39,10 +45,13 @@ class _PracticeTabState extends State<PracticeTab> {
   String _resultTextNormal = '';
   Color _resultColorNormal = Colors.black;
   bool _hasAnsweredNormal = false;
+  bool _hasPeekedNormal = false;
+  bool _lastAnswerWasWrongNormal = false;
   bool _isReversedNormal = false;
   List<Map<String, dynamic>> _allFetchedWordsNormal = [];
   String _questionToDisplay = '';
   List<String> _validAnswersNormal = [];
+  List<String> _acceptedAnswersNormal = [];
 
   // --- MODO PAPAGAIO ---
   String _parrotFilter = 'todas';
@@ -63,6 +72,8 @@ class _PracticeTabState extends State<PracticeTab> {
   String _sharpResultText = '';
   Color _sharpResultColor = Colors.black;
   bool _hasAnsweredSharp = false;
+  bool _hasPeekedSharp = false;
+  bool _lastAnswerWasWrongSharp = false;
   bool _isSharpWriting = false;
   final _sharpAnswerCtrl = TextEditingController();
 
@@ -72,8 +83,11 @@ class _PracticeTabState extends State<PracticeTab> {
   String _imageResultText = '';
   Color _imageResultColor = Colors.black;
   bool _hasAnsweredImage = false;
+  bool _hasPeekedImage = false;
+  bool _lastAnswerWasWrongImage = false;
   bool _imageAskExplanationInFreeMode = false;
   List<String> _validAnswersImage = [];
+  List<String> _acceptedAnswersImage = [];
 
   bool get _isFreeStudy => isCustomStudy(widget.currentLang);
   String get _displayTopic => getStudyDisplayName(widget.currentLang);
@@ -101,23 +115,32 @@ class _PracticeTabState extends State<PracticeTab> {
   void didUpdateWidget(PracticeTab oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.currentLang != widget.currentLang) {
+      _normalTimerToken++;
+      _sharpTimerToken++;
+      _imageTimerToken++;
       if (_isParrotPlaying) _stopParrot();
       _currentWordNormal = null;
       _answerCtrl.clear();
       _resultTextNormal = '';
       _hasAnsweredNormal = false;
+      _hasPeekedNormal = false;
+      _lastAnswerWasWrongNormal = false;
       _questionToDisplay = '';
 
       _currentWordSharp = null;
       _sharpResultText = '';
       _spokenText = '';
       _hasAnsweredSharp = false;
+      _hasPeekedSharp = false;
+      _lastAnswerWasWrongSharp = false;
       _sharpAnswerCtrl.clear();
 
       _currentWordImage = null;
       _imageAnswerCtrl.clear();
       _imageResultText = '';
       _hasAnsweredImage = false;
+      _hasPeekedImage = false;
+      _lastAnswerWasWrongImage = false;
 
       _streak = 0;
       _nextMilestone = 10;
@@ -130,6 +153,9 @@ class _PracticeTabState extends State<PracticeTab> {
 
   @override
   void dispose() {
+    _normalTimerToken++;
+    _sharpTimerToken++;
+    _imageTimerToken++;
     _stopParrot();
     _flutterTts.stop();
     _audioCorrect.dispose();
@@ -142,6 +168,25 @@ class _PracticeTabState extends State<PracticeTab> {
     _sharpAnswerCtrl.dispose();
     _imageAnswerCtrl.dispose();
     super.dispose();
+  }
+
+  String _normalizeForComparison(String input) {
+    return input
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^\p{L}\p{N}\s]', unicode: true), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
+
+  bool _matchesAnyValidAnswer(String rawUserInput, List<String> validList) {
+    final String rawClean = rawUserInput.trim().toLowerCase();
+    final String normUser = _normalizeForComparison(rawUserInput);
+    for (final valid in validList) {
+      if (valid.trim().toLowerCase() == rawClean) return true;
+      final String normValid = _normalizeForComparison(valid);
+      if (normValid.isNotEmpty && normValid == normUser) return true;
+    }
+    return false;
   }
 
   void _playCorrectSound() async {
@@ -183,6 +228,8 @@ class _PracticeTabState extends State<PracticeTab> {
         _playCorrectSound();
       }
     } else {
+      _streakBeforeLastError = _streak;
+      _milestoneBeforeLastError = _nextMilestone;
       DatabaseHelper.instance.registrarAtividade('erros');
       _streak = 0;
       _nextMilestone = 10;
@@ -200,6 +247,136 @@ class _PracticeTabState extends State<PracticeTab> {
     Future.delayed(const Duration(seconds: 3), () {
       if (mounted) setState(() => _showSpecialOverlay = false);
     });
+  }
+
+  Future<void> _abrirDialogoReivindicacao({
+    required String wordIngles,
+    required String currentMeaningsDisplay,
+    required String userTypedAnswer,
+    required bool allowAddingMeaningToDb,
+    required VoidCallback onClaimedSuccess,
+  }) async {
+    _normalTimerToken++;
+    _sharpTimerToken++;
+    _imageTimerToken++;
+
+    final String? acao = await showDialog<String>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.gavel, color: Colors.orange),
+            const SizedBox(width: 8),
+            Expanded(child: Text(t('Reivindicar Resposta'))),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("${t('Palavra / Objeto:')} $wordIngles", style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 6),
+              Text("${t('Significados Atuais:')} $currentMeaningsDisplay"),
+              const SizedBox(height: 6),
+              Text(
+                "${t('Sua Resposta:')} $userTypedAnswer",
+                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
+              ),
+              const Divider(height: 24),
+              Text(
+                t('Como deseja validar esta resposta como correta?'),
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              if (allowAddingMeaningToDb) ...[
+                Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    leading: const Icon(Icons.visibility_off, color: Colors.orange),
+                    title: Text(
+                      t('Adicionar como Significado Oculto'),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    subtitle: Text(
+                      t('Aceita no futuro, mas não aparece na Biblioteca nem no Modo Papagaio.'),
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    onTap: () => Navigator.pop(c, 'oculto'),
+                  ),
+                ),
+                Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    leading: const Icon(Icons.visibility, color: Colors.green),
+                    title: Text(
+                      t('Adicionar como Significado Visível'),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    subtitle: Text(
+                      t('Aparecerá normalmente na Biblioteca e no Modo Papagaio.'),
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    onTap: () => Navigator.pop(c, 'visivel'),
+                  ),
+                ),
+              ],
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.check_circle_outline, color: Colors.blue),
+                  title: Text(
+                    t('Apenas validar acerto desta vez'),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                  onTap: () => Navigator.pop(c, 'apenas_validar'),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, null),
+            child: Text(t('Cancelar')),
+          ),
+        ],
+      ),
+    );
+
+    if (acao == null) return;
+
+    if (acao == 'oculto' || acao == 'visivel') {
+      await DatabaseHelper.instance.adicionarSignificadoReivindicado(
+        ingles: wordIngles,
+        novaTraducao: userTypedAnswer,
+        lingua: widget.currentLang,
+        oculto: acao == 'oculto',
+      );
+    }
+
+    final int restoredStreak = _streakBeforeLastError + 1;
+    final int restoredMilestone = _milestoneBeforeLastError;
+    final bool hitCombo = restoredStreak == restoredMilestone;
+
+    await DatabaseHelper.instance.reverterErroParaAcerto(
+      wordIngles,
+      widget.currentLang,
+      gerouComboEspecial: hitCombo,
+    );
+
+    if (!mounted) return;
+    setState(() {
+      _streak = restoredStreak;
+      if (hitCombo) {
+        _triggerSpecialOverlay(restoredMilestone);
+        _nextMilestone = restoredMilestone < 30 ? restoredMilestone + 10 : restoredMilestone * 2;
+      } else {
+        _nextMilestone = restoredMilestone;
+        _playCorrectSound();
+      }
+    });
+
+    onClaimedSuccess();
   }
 
   Future<void> _falar(String texto, {double rate = 0.5, bool forceNative = false}) async {
@@ -224,6 +401,19 @@ class _PracticeTabState extends State<PracticeTab> {
             if (icon == Icons.keyboard_arrow_up) Icon(icon, color: Colors.grey, size: 20),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyLibraryActionButton() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12.0),
+      child: OutlinedButton.icon(
+        icon: const Icon(Icons.add_circle_outline),
+        label: Text(t('Cadastrar Primeiro Item')),
+        onPressed: () {
+          appNavigateToTab.value = 0;
+        },
       ),
     );
   }
@@ -262,9 +452,10 @@ class _PracticeTabState extends State<PracticeTab> {
   }
 
   // ==========================================
-  // LÓGICA: MODO CLÁSSICO
+  // LÓGICA: MODO CLÁSSICO E ESPIAR RESPOSTA
   // ==========================================
   Future<void> _drawWordNormal() async {
+    _normalTimerToken++;
     final db = DatabaseHelper.instance;
     final filtroGlobal = await db.getConfig('filtro');
     final customGlobal = await db.getConfig('custom_val');
@@ -277,6 +468,8 @@ class _PracticeTabState extends State<PracticeTab> {
     if (!mounted) return;
     if (words.isEmpty) {
       setState(() {
+        _currentWordNormal = null;
+        _questionToDisplay = '';
         _resultTextNormal = t('Sua biblioteca está vazia!');
         _resultColorNormal = Colors.blue;
       });
@@ -289,38 +482,73 @@ class _PracticeTabState extends State<PracticeTab> {
       _answerCtrl.clear();
       _resultTextNormal = '';
       _hasAnsweredNormal = false;
+      _hasPeekedNormal = false;
+      _lastAnswerWasWrongNormal = false;
 
       if (!_isReversedNormal) {
         _questionToDisplay = _currentWordNormal!['ingles'];
         _validAnswersNormal = _currentWordNormal!['traducoes']
             .toString()
             .split('|')
-            .map((e) => e.trim().toLowerCase())
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
             .toList();
+
+        final hiddenList = (_currentWordNormal!['traducoes_ocultas']?.toString() ?? '')
+            .split('|')
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .toList();
+
+        _acceptedAnswersNormal = [..._validAnswersNormal, ...hiddenList];
       } else {
-        final meanings = _currentWordNormal!['traducoes'].toString().split('|').map((e) => e.trim()).toList();
+        final meanings = _currentWordNormal!['traducoes']
+            .toString()
+            .split('|')
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .toList();
         _questionToDisplay = meanings[Random().nextInt(meanings.length)];
         _validAnswersNormal = [];
         for (var w in _allFetchedWordsNormal) {
           final wMeanings = w['traducoes'].toString().split('|').map((e) => e.trim().toLowerCase()).toList();
-          if (wMeanings.contains(_questionToDisplay.toLowerCase())) {
-            _validAnswersNormal.add(w['ingles'].toString().toLowerCase());
+          final wHidden = (w['traducoes_ocultas']?.toString() ?? '')
+              .split('|')
+              .map((e) => e.trim().toLowerCase())
+              .toList();
+          if (wMeanings.contains(_questionToDisplay.toLowerCase()) ||
+              wHidden.contains(_questionToDisplay.toLowerCase())) {
+            _validAnswersNormal.add(w['ingles'].toString());
           }
         }
+        _acceptedAnswersNormal = List<String>.from(_validAnswersNormal);
       }
+    });
+  }
+
+  void _peekAnswerNormal() {
+    if (_currentWordNormal == null || _hasAnsweredNormal) return;
+    _normalTimerToken++;
+    setState(() {
+      _hasAnsweredNormal = true;
+      _hasPeekedNormal = true;
+      _lastAnswerWasWrongNormal = false;
+      final displayCorrect = _validAnswersNormal.join(' ${t('ou')} ');
+      _resultTextNormal = '${t('Resposta revelada (não contabilizada):')} $displayCorrect';
+      _resultColorNormal = Colors.orange.shade800;
     });
   }
 
   void _verifyAnswerNormal() async {
     if (_currentWordNormal == null || _answerCtrl.text.trim().isEmpty || _hasAnsweredNormal) return;
 
-    setState(() {
-      _hasAnsweredNormal = true;
-    });
-    final userAnswer = _answerCtrl.text.trim().toLowerCase();
-    bool acertou = _validAnswersNormal.contains(userAnswer);
+    final int currentToken = ++_normalTimerToken;
+    bool acertou = _matchesAnyValidAnswer(_answerCtrl.text, _acceptedAnswersNormal);
 
     setState(() {
+      _hasAnsweredNormal = true;
+      _hasPeekedNormal = false;
+      _lastAnswerWasWrongNormal = !acertou;
       if (acertou) {
         _resultTextNormal = t('Resposta Correta! 🎉');
         _resultColorNormal = Colors.green;
@@ -334,8 +562,8 @@ class _PracticeTabState extends State<PracticeTab> {
     _handleAnswer(acertou, _currentWordNormal!['ingles']);
 
     if (appAutoNext.value) {
-      await Future.delayed(const Duration(milliseconds: 2500));
-      if (mounted && _hasAnsweredNormal) {
+      await Future.delayed(Duration(milliseconds: acertou ? 2000 : 3200));
+      if (mounted && _hasAnsweredNormal && _normalTimerToken == currentToken) {
         _drawWordNormal();
       }
     }
@@ -473,11 +701,13 @@ class _PracticeTabState extends State<PracticeTab> {
   // LÓGICA: LÍNGUA AFIADA E ESCRITA AFIADA
   // ==========================================
   Future<void> _drawWordSharp() async {
+    _sharpTimerToken++;
     final words = await DatabaseHelper.instance.fetchCustomWords(widget.currentLang, _sharpFilter, _sharpCustomVal);
     if (!mounted) return;
     if (words.isEmpty) {
       setState(() {
-        _sharpResultText = t('Nenhuma palavra encontrada.');
+        _currentWordSharp = null;
+        _sharpResultText = t('Sua biblioteca está vazia!');
         _sharpResultColor = Colors.blue;
       });
       return;
@@ -487,17 +717,25 @@ class _PracticeTabState extends State<PracticeTab> {
       _sharpResultText = '';
       _spokenText = '';
       _hasAnsweredSharp = false;
+      _hasPeekedSharp = false;
+      _lastAnswerWasWrongSharp = false;
       _sharpAnswerCtrl.clear();
     });
     _falar(_currentWordSharp!['ingles']);
   }
 
-  String _normalizeForComparison(String input) {
-    return input
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^\p{L}\p{N}\s]', unicode: true), '')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
+  void _peekAnswerSharp() {
+    if (_currentWordSharp == null || _hasAnsweredSharp) return;
+    _sharpTimerToken++;
+    setState(() {
+      _hasAnsweredSharp = true;
+      _hasPeekedSharp = true;
+      _isListening = false;
+      _lastAnswerWasWrongSharp = false;
+      final String rawTarget = _currentWordSharp!['ingles'].toString().trim();
+      _sharpResultText = '${t('Resposta revelada (não contabilizada):')} $rawTarget';
+      _sharpResultColor = Colors.orange.shade800;
+    });
   }
 
   void _listenSharp() async {
@@ -555,15 +793,15 @@ class _PracticeTabState extends State<PracticeTab> {
   void _verifySpeech() async {
     if (_currentWordSharp == null || _spokenText.trim().isEmpty || _hasAnsweredSharp) return;
 
-    setState(() {
-      _hasAnsweredSharp = true;
-      _isListening = false;
-    });
+    final int currentToken = ++_sharpTimerToken;
     String target = _normalizeForComparison(_currentWordSharp!['ingles'].toString());
     String spoken = _normalizeForComparison(_spokenText);
 
     bool acertou = target.isNotEmpty && (spoken == target || spoken.contains(target));
     setState(() {
+      _hasAnsweredSharp = true;
+      _isListening = false;
+      _lastAnswerWasWrongSharp = !acertou;
       if (acertou) {
         _sharpResultText = t('Pronúncia Perfeita! 🎉');
         _sharpResultColor = Colors.green;
@@ -575,8 +813,8 @@ class _PracticeTabState extends State<PracticeTab> {
 
     _handleAnswer(acertou, _currentWordSharp!['ingles']);
     if (appAutoNext.value) {
-      await Future.delayed(const Duration(milliseconds: 2500));
-      if (mounted && _hasAnsweredSharp) {
+      await Future.delayed(Duration(milliseconds: acertou ? 2000 : 3200));
+      if (mounted && _hasAnsweredSharp && _sharpTimerToken == currentToken) {
         _drawWordSharp();
       }
     }
@@ -585,16 +823,14 @@ class _PracticeTabState extends State<PracticeTab> {
   void _verifyAnswerSharpWriting() async {
     if (_currentWordSharp == null || _sharpAnswerCtrl.text.trim().isEmpty || _hasAnsweredSharp) return;
 
+    final int currentToken = ++_sharpTimerToken;
+    String rawTarget = _currentWordSharp!['ingles'].toString().trim();
+    bool acertou = _matchesAnyValidAnswer(_sharpAnswerCtrl.text, [rawTarget]);
+
     setState(() {
       _hasAnsweredSharp = true;
-    });
-    String rawTarget = _currentWordSharp!['ingles'].toString().trim();
-    String targetNorm = _normalizeForComparison(rawTarget);
-    String userNorm = _normalizeForComparison(_sharpAnswerCtrl.text);
-
-    bool acertou = (rawTarget.toLowerCase() == _sharpAnswerCtrl.text.trim().toLowerCase()) ||
-        (targetNorm.isNotEmpty && targetNorm == userNorm);
-    setState(() {
+      _hasPeekedSharp = false;
+      _lastAnswerWasWrongSharp = !acertou;
       if (acertou) {
         _sharpResultText = t('Escrita Perfeita! 🎉');
         _sharpResultColor = Colors.green;
@@ -606,8 +842,8 @@ class _PracticeTabState extends State<PracticeTab> {
 
     _handleAnswer(acertou, _currentWordSharp!['ingles']);
     if (appAutoNext.value) {
-      await Future.delayed(const Duration(milliseconds: 2500));
-      if (mounted && _hasAnsweredSharp) {
+      await Future.delayed(Duration(milliseconds: acertou ? 2000 : 3200));
+      if (mounted && _hasAnsweredSharp && _sharpTimerToken == currentToken) {
         _drawWordSharp();
       }
     }
@@ -617,6 +853,7 @@ class _PracticeTabState extends State<PracticeTab> {
   // LÓGICA: DESAFIO VISUAL (SORTEIO DE IMAGEM)
   // ==========================================
   Future<void> _drawWordImage() async {
+    _imageTimerToken++;
     final db = DatabaseHelper.instance;
     final filtroGlobal = await db.getConfig('filtro');
     final customGlobal = await db.getConfig('custom_val');
@@ -647,38 +884,56 @@ class _PracticeTabState extends State<PracticeTab> {
       _imageAnswerCtrl.clear();
       _imageResultText = '';
       _hasAnsweredImage = false;
+      _hasPeekedImage = false;
+      _lastAnswerWasWrongImage = false;
       _updateValidImageAnswers();
     });
   }
 
   void _updateValidImageAnswers() {
     if (_currentWordImage == null) return;
-    if (!_isFreeStudy) {
-      _validAnswersImage = [_currentWordImage!['ingles'].toString().trim().toLowerCase()];
+    if (!_isFreeStudy || !_imageAskExplanationInFreeMode) {
+      _validAnswersImage = [_currentWordImage!['ingles'].toString().trim()];
+      _acceptedAnswersImage = List<String>.from(_validAnswersImage);
     } else {
-      if (!_imageAskExplanationInFreeMode) {
-        _validAnswersImage = [_currentWordImage!['ingles'].toString().trim().toLowerCase()];
-      } else {
-        _validAnswersImage = _currentWordImage!['traducoes']
-            .toString()
-            .split('|')
-            .map((e) => e.trim().toLowerCase())
-            .toList();
-      }
+      _validAnswersImage = _currentWordImage!['traducoes']
+          .toString()
+          .split('|')
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+      final hiddenList = (_currentWordImage!['traducoes_ocultas']?.toString() ?? '')
+          .split('|')
+          .map((e) => e.trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+      _acceptedAnswersImage = [..._validAnswersImage, ...hiddenList];
     }
+  }
+
+  void _peekAnswerImage() {
+    if (_currentWordImage == null || _hasAnsweredImage) return;
+    _imageTimerToken++;
+    setState(() {
+      _hasAnsweredImage = true;
+      _hasPeekedImage = true;
+      _lastAnswerWasWrongImage = false;
+      final displayCorrect = _validAnswersImage.join(' ${t('ou')} ');
+      _imageResultText = '${t('Resposta revelada (não contabilizada):')} $displayCorrect';
+      _imageResultColor = Colors.orange.shade800;
+    });
   }
 
   void _verifyAnswerImage() async {
     if (_currentWordImage == null || _imageAnswerCtrl.text.trim().isEmpty || _hasAnsweredImage) return;
 
+    final int currentToken = ++_imageTimerToken;
+    bool acertou = _matchesAnyValidAnswer(_imageAnswerCtrl.text, _acceptedAnswersImage);
+
     setState(() {
       _hasAnsweredImage = true;
-    });
-
-    final userAnswer = _imageAnswerCtrl.text.trim().toLowerCase();
-    bool acertou = _validAnswersImage.contains(userAnswer);
-
-    setState(() {
+      _hasPeekedImage = false;
+      _lastAnswerWasWrongImage = !acertou;
       if (acertou) {
         _imageResultText = t('Resposta Correta! 🎉');
         _imageResultColor = Colors.green;
@@ -692,8 +947,8 @@ class _PracticeTabState extends State<PracticeTab> {
     _handleAnswer(acertou, _currentWordImage!['ingles']);
 
     if (appAutoNext.value) {
-      await Future.delayed(const Duration(milliseconds: 2500));
-      if (mounted && _hasAnsweredImage) {
+      await Future.delayed(Duration(milliseconds: acertou ? 2000 : 3200));
+      if (mounted && _hasAnsweredImage && _imageTimerToken == currentToken) {
         _drawWordImage();
       }
     }
@@ -817,6 +1072,19 @@ class _PracticeTabState extends State<PracticeTab> {
                             _drawWordNormal();
                           },
                         ),
+                        IconButton(
+                          icon: Icon(
+                            _hasPeekedNormal ? Icons.visibility : Icons.visibility_outlined,
+                            color: (_currentWordNormal != null && !_hasAnsweredNormal)
+                                ? Colors.deepPurple
+                                : Colors.grey,
+                            size: 22,
+                          ),
+                          tooltip: t("Espiar Resposta"),
+                          onPressed: (_currentWordNormal != null && !_hasAnsweredNormal)
+                              ? _peekAnswerNormal
+                              : null,
+                        ),
                       ],
                     ),
                     Text(
@@ -831,7 +1099,7 @@ class _PracticeTabState extends State<PracticeTab> {
                   label: Text(_isFreeStudy ? t('Sortear Objeto de Estudo') : t('Sortear Palavra')),
                   onPressed: _drawWordNormal,
                 ),
-                const SizedBox(height: 30),
+                const SizedBox(height: 25),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -866,8 +1134,11 @@ class _PracticeTabState extends State<PracticeTab> {
                   onChanged: (v) => setState(() {}),
                 ),
                 const SizedBox(height: 15),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.center,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     ElevatedButton(
                       onPressed: (_currentWordNormal == null || _answerCtrl.text.trim().isEmpty || _hasAnsweredNormal)
@@ -875,14 +1146,39 @@ class _PracticeTabState extends State<PracticeTab> {
                           : _verifyAnswerNormal,
                       child: Text(t('Confirmar Resposta')),
                     ),
-                    if (_hasAnsweredNormal && !appAutoNext.value) ...[
-                      const SizedBox(width: 12),
+                    if (_hasAnsweredNormal && (!appAutoNext.value || _hasPeekedNormal))
                       FilledButton.tonalIcon(
                         icon: const Icon(Icons.arrow_forward),
                         label: Text(t('Próximo')),
                         onPressed: _drawWordNormal,
                       ),
-                    ],
+                    if (_hasAnsweredNormal && _lastAnswerWasWrongNormal && !_hasPeekedNormal && _currentWordNormal != null)
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.gavel, color: Colors.orange, size: 18),
+                        label: Text(t('Reivindicar Resposta')),
+                        onPressed: () {
+                          _abrirDialogoReivindicacao(
+                            wordIngles: _currentWordNormal!['ingles'].toString(),
+                            currentMeaningsDisplay: _validAnswersNormal.join(' / '),
+                            userTypedAnswer: _answerCtrl.text.trim(),
+                            allowAddingMeaningToDb: !_isReversedNormal,
+                            onClaimedSuccess: () async {
+                              final int token = ++_normalTimerToken;
+                              setState(() {
+                                _lastAnswerWasWrongNormal = false;
+                                _resultTextNormal = t('Resposta reivindicada com sucesso! 🎉');
+                                _resultColorNormal = Colors.green;
+                              });
+                              if (appAutoNext.value) {
+                                await Future.delayed(const Duration(milliseconds: 1800));
+                                if (mounted && _normalTimerToken == token) {
+                                  _drawWordNormal();
+                                }
+                              }
+                            },
+                          );
+                        },
+                      ),
                   ],
                 ),
                 const SizedBox(height: 10),
@@ -891,6 +1187,8 @@ class _PracticeTabState extends State<PracticeTab> {
                   style: TextStyle(fontSize: 18, color: _resultColorNormal, fontWeight: FontWeight.bold),
                   textAlign: TextAlign.center,
                 ),
+                if (_currentWordNormal == null && _resultTextNormal == t('Sua biblioteca está vazia!'))
+                  _buildEmptyLibraryActionButton(),
                 const SizedBox(height: 10),
                 if (_resultTextNormal.isNotEmpty && imgFile != null)
                   ClipRRect(
@@ -1028,6 +1326,8 @@ class _PracticeTabState extends State<PracticeTab> {
                           style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.green),
                           textAlign: TextAlign.center,
                         ),
+                        if (_parrotCurrentWordDisplay == t('Sua biblioteca está vazia!'))
+                          _buildEmptyLibraryActionButton(),
                         const SizedBox(height: 20),
                       ],
                     ),
@@ -1096,6 +1396,20 @@ class _PracticeTabState extends State<PracticeTab> {
                             _drawWordSharp();
                           },
                         ),
+                        if (_isSharpWriting)
+                          IconButton(
+                            icon: Icon(
+                              _hasPeekedSharp ? Icons.visibility : Icons.visibility_outlined,
+                              color: (_currentWordSharp != null && !_hasAnsweredSharp)
+                                  ? Colors.deepPurple
+                                  : Colors.grey,
+                              size: 22,
+                            ),
+                            tooltip: t("Espiar Resposta"),
+                            onPressed: (_currentWordSharp != null && !_hasAnsweredSharp)
+                                ? _peekAnswerSharp
+                                : null,
+                          ),
                       ],
                     ),
                     Text(
@@ -1166,7 +1480,7 @@ class _PracticeTabState extends State<PracticeTab> {
                         style: TextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.bold,
-                          color: _isSharpWriting ? Colors.transparent : null,
+                          color: (_isSharpWriting && !_hasPeekedSharp) ? Colors.transparent : null,
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -1193,6 +1507,8 @@ class _PracticeTabState extends State<PracticeTab> {
                   style: TextStyle(fontSize: 18, color: _sharpResultColor, fontWeight: FontWeight.bold),
                   textAlign: TextAlign.center,
                 ),
+                if (_currentWordSharp == null && _sharpResultText == t('Sua biblioteca está vazia!'))
+                  _buildEmptyLibraryActionButton(),
                 const SizedBox(height: 20),
                 if (!_isSharpWriting) ...[
                   GestureDetector(
@@ -1232,8 +1548,11 @@ class _PracticeTabState extends State<PracticeTab> {
                     onChanged: (v) => setState(() {}),
                   ),
                   const SizedBox(height: 15),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       ElevatedButton(
                         onPressed: (_currentWordSharp == null || _sharpAnswerCtrl.text.trim().isEmpty || _hasAnsweredSharp)
@@ -1241,14 +1560,39 @@ class _PracticeTabState extends State<PracticeTab> {
                             : _verifyAnswerSharpWriting,
                         child: Text(t('Confirmar Resposta')),
                       ),
-                      if (_hasAnsweredSharp && !appAutoNext.value) ...[
-                        const SizedBox(width: 12),
+                      if (_hasAnsweredSharp && (!appAutoNext.value || _hasPeekedSharp))
                         FilledButton.tonalIcon(
                           icon: const Icon(Icons.arrow_forward),
                           label: Text(t('Próximo')),
                           onPressed: _drawWordSharp,
                         ),
-                      ],
+                      if (_hasAnsweredSharp && _lastAnswerWasWrongSharp && !_hasPeekedSharp && _currentWordSharp != null)
+                        OutlinedButton.icon(
+                          icon: const Icon(Icons.gavel, color: Colors.orange, size: 18),
+                          label: Text(t('Reivindicar Resposta')),
+                          onPressed: () {
+                            _abrirDialogoReivindicacao(
+                              wordIngles: _currentWordSharp!['ingles'].toString(),
+                              currentMeaningsDisplay: _currentWordSharp!['traducoes'].toString().replaceAll('|', ' / '),
+                              userTypedAnswer: _sharpAnswerCtrl.text.trim(),
+                              allowAddingMeaningToDb: false,
+                              onClaimedSuccess: () async {
+                                final int token = ++_sharpTimerToken;
+                                setState(() {
+                                  _lastAnswerWasWrongSharp = false;
+                                  _sharpResultText = t('Resposta reivindicada com sucesso! 🎉');
+                                  _sharpResultColor = Colors.green;
+                                });
+                                if (appAutoNext.value) {
+                                  await Future.delayed(const Duration(milliseconds: 1800));
+                                  if (mounted && _sharpTimerToken == token) {
+                                    _drawWordSharp();
+                                  }
+                                }
+                              },
+                            );
+                          },
+                        ),
                     ],
                   ),
                 ],
@@ -1309,6 +1653,19 @@ class _PracticeTabState extends State<PracticeTab> {
                           t("Desafio Visual"),
                           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                         ),
+                        IconButton(
+                          icon: Icon(
+                            _hasPeekedImage ? Icons.visibility : Icons.visibility_outlined,
+                            color: (_currentWordImage != null && !_hasAnsweredImage)
+                                ? Colors.deepPurple
+                                : Colors.grey,
+                            size: 22,
+                          ),
+                          tooltip: t("Espiar Resposta"),
+                          onPressed: (_currentWordImage != null && !_hasAnsweredImage)
+                              ? _peekAnswerImage
+                              : null,
+                        ),
                       ],
                     ),
                     Text(
@@ -1357,16 +1714,16 @@ class _PracticeTabState extends State<PracticeTab> {
                   )
                 else
                   Container(
-                    height: 160,
                     width: double.infinity,
+                    padding: const EdgeInsets.all(16.0),
                     decoration: BoxDecoration(
                       border: Border.all(color: Colors.grey.shade400),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Text(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
                           _imageResultText.isNotEmpty ? _imageResultText : t('Clique acima para sortear'),
                           style: TextStyle(
                             fontSize: 16,
@@ -1375,7 +1732,8 @@ class _PracticeTabState extends State<PracticeTab> {
                           ),
                           textAlign: TextAlign.center,
                         ),
-                      ),
+                        if (_imageResultText.isNotEmpty) _buildEmptyLibraryActionButton(),
+                      ],
                     ),
                   ),
 
@@ -1392,8 +1750,11 @@ class _PracticeTabState extends State<PracticeTab> {
                   onChanged: (v) => setState(() {}),
                 ),
                 const SizedBox(height: 15),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.center,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     ElevatedButton(
                       onPressed: (_currentWordImage == null || _imageAnswerCtrl.text.trim().isEmpty || _hasAnsweredImage)
@@ -1401,14 +1762,39 @@ class _PracticeTabState extends State<PracticeTab> {
                           : _verifyAnswerImage,
                       child: Text(t('Confirmar Resposta')),
                     ),
-                    if (_hasAnsweredImage && !appAutoNext.value) ...[
-                      const SizedBox(width: 12),
+                    if (_hasAnsweredImage && (!appAutoNext.value || _hasPeekedImage))
                       FilledButton.tonalIcon(
                         icon: const Icon(Icons.arrow_forward),
                         label: Text(t('Próximo')),
                         onPressed: _drawWordImage,
                       ),
-                    ],
+                    if (_hasAnsweredImage && _lastAnswerWasWrongImage && !_hasPeekedImage && _currentWordImage != null)
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.gavel, color: Colors.orange, size: 18),
+                        label: Text(t('Reivindicar Resposta')),
+                        onPressed: () {
+                          _abrirDialogoReivindicacao(
+                            wordIngles: _currentWordImage!['ingles'].toString(),
+                            currentMeaningsDisplay: _validAnswersImage.join(' / '),
+                            userTypedAnswer: _imageAnswerCtrl.text.trim(),
+                            allowAddingMeaningToDb: _isFreeStudy && _imageAskExplanationInFreeMode,
+                            onClaimedSuccess: () async {
+                              final int token = ++_imageTimerToken;
+                              setState(() {
+                                _lastAnswerWasWrongImage = false;
+                                _imageResultText = t('Resposta reivindicada com sucesso! 🎉');
+                                _imageResultColor = Colors.green;
+                              });
+                              if (appAutoNext.value) {
+                                await Future.delayed(const Duration(milliseconds: 1800));
+                                if (mounted && _imageTimerToken == token) {
+                                  _drawWordImage();
+                                }
+                              }
+                            },
+                          );
+                        },
+                      ),
                   ],
                 ),
                 const SizedBox(height: 12),

@@ -36,8 +36,9 @@ final ValueNotifier<String> appLanguage = ValueNotifier('Inglês');
 final ValueNotifier<String> appNativeLanguage = ValueNotifier('Português');
 final ValueNotifier<bool> appFeedbackEnabled = ValueNotifier(true);
 final ValueNotifier<bool> appTreinoInteligente = ValueNotifier(false);
-final ValueNotifier<bool> appAutoNext = ValueNotifier(true);
+final ValueNotifier<bool> appAutoNext = ValueNotifier(false);
 final ValueNotifier<int> appDataVersion = ValueNotifier(0);
+final ValueNotifier<int?> appNavigateToTab = ValueNotifier<int?>(null);
 
 // Helpers para identificar se o usuário está estudando um Idioma ou um Tema Livre
 bool isCustomStudy(String langKey) => langKey.startsWith('tema:');
@@ -76,9 +77,8 @@ Future<void> carregarConfiguracoesGlobaisDoBanco() async {
   if (treinoSalvo.isNotEmpty) {
     appTreinoInteligente.value = (treinoSalvo == 'true');
   }
-  if (autoNextSalvo.isNotEmpty) {
-    appAutoNext.value = (autoNextSalvo == 'true');
-  }
+  // Por padrão vem desligado (false), só ativa se estiver explicitamente salvo como 'true'
+  appAutoNext.value = (autoNextSalvo == 'true');
   appDataVersion.value++;
 }
 
@@ -274,6 +274,29 @@ String t(String text) {
       'it': 'Disattiva per avanzare manualmente', 'ru': 'Отключите для перехода вручную в своем темпе', 'ja': 'オフにすると自分のペースで手動で進みます', 'zh-cn': '关闭后可按自己的节奏手动前进',
       'ko': '비활성화하면 수동으로 다음 문제로 이동합니다', 'hi': 'अपनी गति से आगे बढ़ने के लिए इसे बंद करें', 'ar': 'قم بتعطيله للتقدم يدوياً بالسرعة التي تناسبك'
     },
+    'Aviso sobre o Sorteio Automático': {
+      'en': 'Auto-Draw Warning', 'de': 'Hinweis zum automatischen Weitergehen', 'es': 'Aviso sobre el Sorteo Automático', 'fr': 'Avis sur le tirage automatique',
+      'it': 'Avviso avanzamento automatico', 'ru': 'Предупреждение об автопереходе', 'ja': '自動出題に関するご注意', 'zh-cn': '自动抽题提示',
+      'ko': '자동 다음 문제 알림', 'hi': 'स्वतः अगले प्रश्न की चेतावनी', 'ar': 'تنبيه حول السحب التلقائي'
+    },
+    'Não recomendamos o uso do sorteio automático caso tenha dificuldade e precise de mais tempo para analisar erros e reivindicar respostas.': {
+      'en': 'We do not recommend using auto-draw if you have difficulty and need more time to analyze mistakes and claim answers.',
+      'de': 'Wir empfehlen das automatische Weitergehen nicht, wenn Sie mehr Zeit benötigen, um Fehler zu analysieren und Antworten zu beanspruchen.',
+      'es': 'No recomendamos usar el sorteo automático si tienes dificultad y necesitas más tiempo para analizar errores y reclamar respuestas.',
+      'fr': 'Nous ne recommandons pas le tirage automatique si vous avez besoin de plus de temps pour analyser vos erreurs et revendiquer des réponses.',
+      'it': 'Non consigliamo l\'avanzamento automatico se hai difficoltà e necessiti di più tempo per analizzare gli errori e rivendicare le risposte.',
+      'ru': 'Не рекомендуем включать автопереход, если вам нужно больше времени для анализа ошибок и оспаривания ответов.',
+      'ja': '間違いを分析したり回答を申請したりする時間が必要な場合は、自動出題の使用をおすすめしません。',
+      'zh-cn': '如果您需要更多时间分析错误和申诉答案，我们不建议开启自动抽题。',
+      'ko': '오류를 분석하고 정답 인정 신청을 하기 위해 더 많은 시간이 필요한 경우 자동 넘어감 사용을 권장하지 않습니다.',
+      'hi': 'यदि आपको कठिनाई होती है और गलतियों का विश्लेषण करने व उत्तर का दावा करने के लिए अधिक समय चाहिए, तो हम स्वतः अगले प्रश्न की सलाह नहीं देते हैं।',
+      'ar': 'لا ننصح باستخدام السحب التلقائي إذا كنت تواجه صعوبة وتحتاج إلى مزيد من الوقت لتحليل الأخطاء والمطالبة بالإجابات.'
+    },
+    'Entendi': {
+      'en': 'Got it', 'de': 'Verstanden', 'es': 'Entendido', 'fr': 'Compris',
+      'it': 'Ho capito', 'ru': 'Понятно', 'ja': '了解', 'zh-cn': '知道了',
+      'ko': '확인', 'hi': 'समझ गया', 'ar': 'فهمت'
+    },
     'Próximo': {
       'en': 'Next', 'de': 'Weiter', 'es': 'Siguiente', 'fr': 'Suivant',
       'it': 'Avanti', 'ru': 'Далее', 'ja': '次へ', 'zh-cn': '下一个',
@@ -446,11 +469,150 @@ String t(String text) {
       'ko': '학습 항목이 성공적으로 저장되었습니다!', 'hi': 'अध्ययन वस्तु सफलतापूर्वक सहेजी गई!', 'ar': 'تم حفظ عنصر الدراسة بنجاح!'
     },
 
-    // --- TELA DE PRÁTICA (CLÁSSICO, PAPAGAIO, AFIADA, VISUAL, DESEMPENHO) ---
+    // --- TELA DE PRÁTICA, ESPIAR RESPOSTA E REIVINDICAÇÃO ---
     'Modo Clássico': {
       'en': 'Classic Mode', 'de': 'Klassischer Modus', 'es': 'Modo Clásico', 'fr': 'Mode Classique',
       'it': 'Modalità Classica', 'ru': 'Классический режим', 'ja': 'クラシックモード', 'zh-cn': '经典模式',
       'ko': '클래식 모드', 'hi': 'क्लासिक मोड', 'ar': 'الوضع الكلاسيكي'
+    },
+    'Espiar Resposta': {
+      'en': 'Peek Answer', 'de': 'Antwort spicken', 'es': 'Espiar Respuesta', 'fr': 'Voir la réponse',
+      'it': 'Sbircia Risposta', 'ru': 'Подсмотреть ответ', 'ja': '答えを覗く', 'zh-cn': '偷看答案',
+      'ko': '정답 엿보기', 'hi': 'उत्तर देखें', 'ar': 'نظرة خاطفة على الإجابة'
+    },
+    'Resposta revelada (não contabilizada):': {
+      'en': 'Answer revealed (not counted):', 'de': 'Antwort aufgedeckt (nicht gewertet):', 'es': 'Respuesta revelada (no contabilizada):', 'fr': 'Réponse révélée (non comptabilisée) :',
+      'it': 'Risposta rivelata (non conteggiata):', 'ru': 'Ответ показан (не засчитан):', 'ja': '答えを表示しました（成績対象外）：', 'zh-cn': '已显示答案（不计入成绩）：',
+      'ko': '정답 공개됨 (점수 미반영):', 'hi': 'उत्तर दिखाया गया (गिना नहीं गया):', 'ar': 'تم كشف الإجابة (غير محتسبة):'
+    },
+    'Modo Flashcard': {
+      'en': 'Flashcard Mode', 'de': 'Karteikarten-Modus', 'es': 'Modo Tarjeta', 'fr': 'Mode Flashcard',
+      'it': 'Modalità Flashcard', 'ru': 'Режим карточек', 'ja': 'フラッシュカード', 'zh-cn': '闪卡模式',
+      'ko': '플래시카드 모드', 'hi': 'फ़्लैशकार्ड मोड', 'ar': 'وضع البطاقات'
+    },
+    'Modo Digitação': {
+      'en': 'Typing Mode', 'de': 'Tipp-Modus', 'es': 'Modo Escritura', 'fr': 'Mode Saisie',
+      'it': 'Modalità Digitazione', 'ru': 'Режим ввода', 'ja': '入力モード', 'zh-cn': '输入模式',
+      'ko': '입력 모드', 'hi': 'टाइपिंग मोड', 'ar': 'وضع الكتابة'
+    },
+    'Revelar Resposta': {
+      'en': 'Reveal Answer', 'de': 'Antwort aufdecken', 'es': 'Mostrar Respuesta', 'fr': 'Révéler la réponse',
+      'it': 'Mostra Risposta', 'ru': 'Показать ответ', 'ja': '答えを見る', 'zh-cn': '显示答案',
+      'ko': '정답 보기', 'hi': 'उत्तर दिखाएं', 'ar': 'إظهار الإجابة'
+    },
+    'Acertei': {
+      'en': 'I got it right', 'de': 'Richtig gewusst', 'es': 'Acerté', 'fr': "J'ai réussi",
+      'it': 'Ho indovinato', 'ru': 'Верно', 'ja': '正解した', 'zh-cn': '答对了',
+      'ko': '맞았어요', 'hi': 'सही किया', 'ar': 'أصبت'
+    },
+    'Errei': {
+      'en': 'I missed it', 'de': 'Nicht gewusst', 'es': 'Fallé', 'fr': "J'ai raté",
+      'it': 'Ho sbagliato', 'ru': 'Неверно', 'ja': '間違えた', 'zh-cn': '答错了',
+      'ko': '틀렸어요', 'hi': 'गलत हुआ', 'ar': 'أخطأت'
+    },
+    'Reivindicar Resposta': {
+      'en': 'Claim Answer', 'de': 'Antwort beanspruchen', 'es': 'Reclamar Respuesta', 'fr': 'Revendiquer la réponse',
+      'it': 'Rivendica Risposta', 'ru': 'Оспорить ответ', 'ja': '正解として申請', 'zh-cn': '申诉答案',
+      'ko': '정답으로 인정받기', 'hi': 'उत्तर का दावा करें', 'ar': 'المطالبة بالإجابة'
+    },
+    'Palavra / Objeto:': {
+      'en': 'Word / Object:', 'de': 'Wort / Objekt:', 'es': 'Palabra / Objeto:', 'fr': 'Mot / Objet :',
+      'it': 'Parola / Oggetto:', 'ru': 'Слово / Объект:', 'ja': '単語 / 項目：', 'zh-cn': '单词 / 对象：',
+      'ko': '단어 / 항목:', 'hi': 'शब्द / वस्तु:', 'ar': 'الكلمة / العنصر:'
+    },
+    'Significados Atuais:': {
+      'en': 'Current Meanings:', 'de': 'Aktuelle Bedeutungen:', 'es': 'Significados Actuales:', 'fr': 'Significations actuelles :',
+      'it': 'Significati Attuali:', 'ru': 'Текущие значения:', 'ja': '現在の意味：', 'zh-cn': '当前含义：',
+      'ko': '현재 등록된 의미:', 'hi': 'वर्तमान अर्थ:', 'ar': 'المعاني الحالية:'
+    },
+    'Sua Resposta:': {
+      'en': 'Your Answer:', 'de': 'Deine Antwort:', 'es': 'Tu Respuesta:', 'fr': 'Votre réponse :',
+      'it': 'La Tua Risposta:', 'ru': 'Ваш ответ:', 'ja': 'あなたの回答：', 'zh-cn': '您的回答：',
+      'ko': '입력한 답변:', 'hi': 'आपका उत्तर:', 'ar': 'إجابتك:'
+    },
+    'Como deseja validar esta resposta como correta?': {
+      'en': 'How do you want to validate this answer as correct?',
+      'de': 'Wie möchten Sie diese Antwort als richtig bestätigen?',
+      'es': '¿Cómo deseas validar esta respuesta como correcta?',
+      'fr': 'Comment souhaitez-vous valider cette réponse ?',
+      'it': 'Come vuoi convalidare questa risposta come corretta?',
+      'ru': 'Как вы хотите засчитать этот ответ как правильный?',
+      'ja': 'この回答をどのように正解として登録しますか？',
+      'zh-cn': '您希望如何将此回答验证为正确？',
+      'ko': '이 답변을 어떻게 정답으로 처리하시겠습니까?',
+      'hi': 'आप इस उत्तर को सही के रूप में कैसे मान्य करना चाहते हैं?',
+      'ar': 'كيف تريد اعتماد هذه الإجابة كصحيحة؟'
+    },
+    'Adicionar como Significado Oculto': {
+      'en': 'Add as Hidden Meaning', 'de': 'Als versteckte Bedeutung hinzufügen', 'es': 'Añadir como Significado Oculto', 'fr': 'Ajouter comme sens masqué',
+      'it': 'Aggiungi come Significato Nascosto', 'ru': 'Добавить как скрытое значение', 'ja': '非表示の意味として追加', 'zh-cn': '添加为隐藏含义',
+      'ko': '숨김 의미로 추가', 'hi': 'छिपे हुए अर्थ के रूप में जोड़ें', 'ar': 'إضافة كمعنى مخفي'
+    },
+    'Aceita no futuro, mas não aparece na Biblioteca nem no Modo Papagaio.': {
+      'en': 'Accepted in the future, but hidden from Library and Parrot Mode.',
+      'de': 'Wird künftig akzeptiert, erscheint aber nicht in Bibliothek oder Papageienmodus.',
+      'es': 'Se aceptará en el futuro, pero no aparecerá en la Biblioteca ni en el Modo Loro.',
+      'fr': 'Accepté à l\'avenir, mais masqué dans la Bibliothèque et le Mode Perroquet.',
+      'it': 'Accettato in futuro, ma nascosto nella Libreria e nella Modalità Pappagallo.',
+      'ru': 'Будет приниматься в будущем, но скрыто в библиотеке и режиме Попугая.',
+      'ja': '今後は正解になりますが、ライブラリやオウムモードには表示されません。',
+      'zh-cn': '今后将被视为正确，但不会显示在词库或鹦鹉模式中。',
+      'ko': '앞으로 정답으로 인정되지만 라이브러리나 앵무새 모드에는 표시되지 않습니다.',
+      'hi': 'भविष्य में स्वीकार किया जाएगा, लेकिन लाइब्रेरी या तोता मोड में नहीं दिखेगा।',
+      'ar': 'تُقبل مستقبلاً، لكنها لا تظهر في المكتبة ولا تُنطق في وضع الببغاء.'
+    },
+    'Adicionar como Significado Visível': {
+      'en': 'Add as Visible Meaning', 'de': 'Als sichtbare Bedeutung hinzufügen', 'es': 'Añadir como Significado Visible', 'fr': 'Ajouter comme sens visible',
+      'it': 'Aggiungi come Significato Visibile', 'ru': 'Добавить как обычное значение', 'ja': '通常の意味として追加', 'zh-cn': '添加为可见含义',
+      'ko': '일반 의미로 추가', 'hi': 'दृश्य अर्थ के रूप में जोड़ें', 'ar': 'إضافة كمعنى مرئي'
+    },
+    'Aparecerá normalmente na Biblioteca e no Modo Papagaio.': {
+      'en': 'Will appear normally in the Library and Parrot Mode.',
+      'de': 'Erscheint normal in der Bibliothek und im Papageienmodus.',
+      'es': 'Aparecerá normalmente en la Biblioteca y en el Modo Loro.',
+      'fr': 'Apparaîtra normalmente dans la Bibliothèque et le Mode Perroquet.',
+      'it': 'Apparirà normalmente nella Libreria e nella Modalità Pappagallo.',
+      'ru': 'Будет отображаться в библиотеке и озвучиваться в режиме Попугая.',
+      'ja': 'ライブラリやオウムモードに通常通り表示されます。',
+      'zh-cn': '将正常显示在词库和鹦鹉模式中。',
+      'ko': '라이브러리와 앵무새 모드에 정상적으로 표시됩니다.',
+      'hi': 'लाइब्रेरी और तोता मोड में सामान्य रूप से दिखाई देगा।',
+      'ar': 'ستظهر بشكل طبيعي في المكتبة ووضع الببغاء.'
+    },
+    'Apenas validar acerto desta vez': {
+      'en': 'Just count as correct this time', 'de': 'Nur diesmal als richtig werten', 'es': 'Solo validar acierto esta vez', 'fr': 'Valider uniquement cette fois',
+      'it': 'Convalida solo per questa volta', 'ru': 'Засчитать только в этот раз', 'ja': '今回だけ正解にする', 'zh-cn': '仅本次算作正确',
+      'ko': '이번에만 정답으로 인정', 'hi': 'केवल इस बार सही मानें', 'ar': 'اعتماد الإجابة هذه المرة فقط'
+    },
+    'Resposta reivindicada com sucesso! 🎉': {
+      'en': 'Answer claimed successfully! 🎉', 'de': 'Antwort erfolgreich beansprucht! 🎉', 'es': '¡Respuesta reclamada con éxito! 🎉', 'fr': 'Réponse revendiquée avec succès ! 🎉',
+      'it': 'Risposta rivendicata con successo! 🎉', 'ru': 'Ответ успешно засчитан! 🎉', 'ja': '回答を正解として登録しました！ 🎉', 'zh-cn': '答案申诉成功！ 🎉',
+      'ko': '답변이 정답으로 처리되었습니다! 🎉', 'hi': 'उत्तर सफलतापूर्वक मान्य किया गया! 🎉', 'ar': 'تمت المطالبة بالإجابة بنجاح! 🎉'
+    },
+    'Significados Ocultos': {
+      'en': 'Hidden Meanings', 'de': 'Versteckte Bedeutungen', 'es': 'Significados Ocultos', 'fr': 'Significations masquées',
+      'it': 'Significati Nascosti', 'ru': 'Скрытые значения', 'ja': '非表示の意味', 'zh-cn': '隐藏含义',
+      'ko': '숨김 의미', 'hi': 'छिपे हुए अर्थ', 'ar': 'المعاني المخفية'
+    },
+    'Oculto': {
+      'en': 'Hidden', 'de': 'Versteckt', 'es': 'Oculto', 'fr': 'Masqué',
+      'it': 'Nascosto', 'ru': 'Скрытое', 'ja': '非表示', 'zh-cn': '隐藏',
+      'ko': '숨김', 'hi': 'छिपा हुआ', 'ar': 'مخفي'
+    },
+    'Adicionar Oculto': {
+      'en': 'Add Hidden', 'de': 'Versteckt hinzufügen', 'es': 'Añadir Oculto', 'fr': 'Ajouter masqué',
+      'it': 'Aggiungi Nascosto', 'ru': 'Добавить скрытое', 'ja': '非表示を追加', 'zh-cn': '添加隐藏项',
+      'ko': '숨김 항목 추가', 'hi': 'छिपा हुआ जोड़ें', 'ar': 'إضافة مخفي'
+    },
+    'Nenhum significado oculto registrado.': {
+      'en': 'No hidden meanings registered.', 'de': 'Keine versteckten Bedeutungen registriert.', 'es': 'No hay significados ocultos registrados.', 'fr': 'Aucune signification masquée enregistrée.',
+      'it': 'Nessun significato nascosto registrato.', 'ru': 'Скрытых значений нет.', 'ja': '非表示の意味は登録されていません。', 'zh-cn': '暂无隐藏含义。',
+      'ko': '등록된 숨김 의미가 없습니다.', 'hi': 'कोई छिपा हुआ अर्थ दर्ज नहीं है।', 'ar': 'لا توجد معانٍ مخفية مسجلة.'
+    },
+    'Cadastrar Primeiro Item': {
+      'en': 'Register First Item', 'de': 'Ersten Eintrag erstellen', 'es': 'Registrar Primer Elemento', 'fr': 'Ajouter le premier élément',
+      'it': 'Registra Primo Elemento', 'ru': 'Добавить первую запись', 'ja': '最初の項目を登録', 'zh-cn': '添加第一个项目',
+      'ko': '첫 항목 등록하기', 'hi': 'पहला आइटम दर्ज करें', 'ar': 'تسجيل العنصر الأول'
     },
     'Inverter': {
       'en': 'Reverse', 'de': 'Umkehren', 'es': 'Invertir', 'fr': 'Inverser',
@@ -853,7 +1015,7 @@ String t(String text) {
     'Deseja apagar esta palavra e TODOS os seus significados nesta língua?': {
       'en': 'Do you want to delete this word and ALL its meanings in this language?',
       'de': 'Möchten Sie dieses Wort und ALLE seine Bedeutungen in dieser Sprache löschen?',
-      'es': '¿Deseas eliminar esta palabra e TODOS sus significados en este idioma?',
+      'es': '¿Deseas eliminar esta palabra y TODOS sus significados en este idioma?',
       'fr': 'Voulez-vous supprimer ce mot et TOUTES ses significations dans cette langue ?',
       'it': 'Vuoi eliminare questa parola e TUTTI i suoi significati in questa lingua?',
       'ru': 'Удалить это слово и ВСЕ его значения на этом языке?',
@@ -915,15 +1077,56 @@ String t(String text) {
       'it': 'Backup e Ripristino', 'ru': 'Резервная копия', 'ja': 'バックアップと復元', 'zh-cn': '备份与恢复',
       'ko': '백업 및 복원', 'hi': 'बैकअप और रीस्टोर', 'ar': 'النسخ الاحتياطي والاستعادة'
     },
-    'Exportar': {
-      'en': 'Export', 'de': 'Exportieren', 'es': 'Exportar', 'fr': 'Exporter',
-      'it': 'Esporta', 'ru': 'Экспорт', 'ja': 'エクスポート', 'zh-cn': '导出',
-      'ko': '내보내기', 'hi': 'निर्यात करें', 'ar': 'تصدير'
+    'Exportar Tudo': {
+      'en': 'Export All', 'de': 'Alles exportieren', 'es': 'Exportar Todo', 'fr': 'Tout exporter',
+      'it': 'Esporta Tutto', 'ru': 'Экспорт всего', 'ja': 'すべてエクスポート', 'zh-cn': '导出全部',
+      'ko': '전체 내보내기', 'hi': 'सब कुछ निर्यात करें', 'ar': 'تصدير الكل'
+    },
+    'Exportar Tema Atual': {
+      'en': 'Export Current Topic', 'de': 'Aktuelles Thema exportieren', 'es': 'Exportar Tema Actual', 'fr': 'Exporter le sujet actuel',
+      'it': 'Esporta Tema Attuale', 'ru': 'Экспорт текущей темы', 'ja': '現在のテーマをエクスポート', 'zh-cn': '导出当前主题',
+      'ko': '현재 주제 내보내기', 'hi': 'वर्तमान विषय निर्यात करें', 'ar': 'تصدير الموضوع الحالي'
     },
     'Importar': {
       'en': 'Import', 'de': 'Importieren', 'es': 'Importar', 'fr': 'Importer',
       'it': 'Importa', 'ru': 'Импорт', 'ja': 'インポート', 'zh-cn': '导入',
       'ko': '가져오기', 'hi': 'आयात करें', 'ar': 'استيراد'
+    },
+    'Como deseja importar este backup?': {
+      'en': 'How do you want to import this backup?',
+      'de': 'Wie möchten Sie dieses Backup importieren?',
+      'es': '¿Cómo deseas importar esta copia de seguridad?',
+      'fr': 'Comment souhaitez-vous importer cette sauvegarde ?',
+      'it': 'Come vuoi importare questo backup?',
+      'ru': 'Как вы хотите импортировать резервную копию?',
+      'ja': 'バックアップをどのようにインポートしますか？',
+      'zh-cn': '您希望如何导入此备份？',
+      'ko': '이 백업을 어떻게 가져오시겠습니까?',
+      'hi': 'आप इस बैकअप को कैसे आयात करना चाहते हैं?',
+      'ar': 'كيف تريد استيراد هذه النسخة الاحتياطية؟'
+    },
+    'Mesclar adiciona os itens do arquivo sem apagar os seus dados atuais. Substituir restaura o backup por completo.': {
+      'en': 'Merge adds items from the file without deleting your current data. Replace restores the full backup.',
+      'de': 'Zusammenführen fügt Einträge hinzu, ohne aktuelle Daten zu löschen. Ersetzen stellt das gesamte Backup wieder her.',
+      'es': 'Combinar añade los elementos sin borrar tus datos actuales. Reemplazar restaura la copia por completo.',
+      'fr': 'Fusionner ajoute les éléments sans supprimer vos données actuelles. Remplacer restaure toute la sauvegarde.',
+      'it': 'Unisci aggiunge gli elementi senza cancellare i dati attuali. Sostituisci ripristina il backup completo.',
+      'ru': 'Объединить добавит записи без удаления текущих данных. Заменить полностью восстановит копию.',
+      'ja': '統合すると現在のデータを消さずに項目を追加します。置換するとバックアップを完全に復元します。',
+      'zh-cn': '合并将在不删除当前数据的情况下添加项目。替换将完全恢复备份。',
+      'ko': '병합은 현재 데이터를 지우지 않고 항목을 추가합니다. 덮어쓰기는 백업을 완전히 복원합니다.',
+      'hi': 'मर्ज करने से आपके वर्तमान डेटा को हटाए बिना आइटम जुड़ जाते हैं। बदलने से पूरा बैकअप रीस्टोर हो जाता है।',
+      'ar': 'الدمج يضيف العناصر دون حذف بياناتك الحالية. الاستبدال يستعيد النسخة الاحتياطية بالكامل.'
+    },
+    'Mesclar': {
+      'en': 'Merge', 'de': 'Zusammenführen', 'es': 'Combinar', 'fr': 'Fusionner',
+      'it': 'Unisci', 'ru': 'Объединить', 'ja': '統合する', 'zh-cn': '合并',
+      'ko': '병합', 'hi': 'मर्ज करें', 'ar': 'دمج'
+    },
+    'Substituir Tudo': {
+      'en': 'Replace All', 'de': 'Alles ersetzen', 'es': 'Reemplazar Todo', 'fr': 'Tout remplacer',
+      'it': 'Sostituisci Tutto', 'ru': 'Заменить всё', 'ja': 'すべて置換', 'zh-cn': '全部替换',
+      'ko': '전체 덮어쓰기', 'hi': 'सब बदलें', 'ar': 'استبدال الكل'
     },
     'Backup importado com sucesso!': {
       'en': 'Backup imported successfully!',
@@ -937,6 +1140,19 @@ String t(String text) {
       'ko': '백업을 성공적으로 가져왔습니다!',
       'hi': 'बैकअप सफलतापूर्वक आयात किया गया!',
       'ar': 'تم استيراد النسخة الاحتياطية بنجاح!'
+    },
+    'Itens importados e mesclados com sucesso!': {
+      'en': 'Items imported and merged successfully!',
+      'de': 'Einträge erfolgreich importiert und zusammengeführt!',
+      'es': '¡Elementos importados y combinados con éxito!',
+      'fr': 'Éléments importés et fusionnés avec succès !',
+      'it': 'Elementi importati e uniti con successo!',
+      'ru': 'Записи успешно импортированы и объединены!',
+      'ja': '項目をインポートして統合しました！',
+      'zh-cn': '项目已成功导入并合并！',
+      'ko': '항목을 성공적으로 가져와 병합했습니다!',
+      'hi': 'आइटम सफलतापूर्वक आयात और मर्ज किए गए!',
+      'ar': 'تم استيراد العناصر ودمجها بنجاح!'
     },
     'Nenhum backup selecionado ou falha na importação.': {
       'en': 'No backup selected or import failed.',
@@ -1013,10 +1229,24 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     _mainPageController = PageController(initialPage: _currentIndex);
+    appNavigateToTab.addListener(_onExternalTabRequest);
+  }
+
+  void _onExternalTabRequest() {
+    final target = appNavigateToTab.value;
+    if (target != null && _mainPageController.hasClients) {
+      _mainPageController.animateToPage(
+        target,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+      appNavigateToTab.value = null;
+    }
   }
 
   @override
   void dispose() {
+    appNavigateToTab.removeListener(_onExternalTabRequest);
     _mainPageController.dispose();
     super.dispose();
   }
@@ -1116,7 +1346,7 @@ class SettingsSheet extends StatefulWidget {
 class _SettingsSheetState extends State<SettingsSheet> {
   bool _isDark = false;
   bool _isFeedbackEnabled = true;
-  bool _isAutoNext = true;
+  bool _isAutoNext = false;
   bool _isBusyBackup = false;
   String _filtro = 'todas';
   bool _modoTemaLivre = false;
@@ -1173,8 +1403,34 @@ class _SettingsSheetState extends State<SettingsSheet> {
 
       _idiomaNativoSelecionado = supportedLanguages.containsKey(idiomaNativo) ? idiomaNativo : 'Português';
       _isFeedbackEnabled = (feedback.isEmpty || feedback == 'true');
-      _isAutoNext = (autoNext.isEmpty || autoNext == 'true');
+      // Por padrão fica desligado (false) a menos que esteja salvo como 'true'
+      _isAutoNext = (autoNext == 'true');
     });
+  }
+
+  Future<void> _mostrarAvisoSorteioAutomatico() async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.orange),
+            const SizedBox(width: 8),
+            Expanded(child: Text(t("Aviso sobre o Sorteio Automático"))),
+          ],
+        ),
+        content: Text(
+          t("Não recomendamos o uso do sorteio automático caso tenha dificuldade e precise de mais tempo para analisar erros e reivindicar respostas."),
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(c),
+            child: Text(t("Entendi")),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _criarNovoTemaDialog() async {
@@ -1295,6 +1551,33 @@ class _SettingsSheetState extends State<SettingsSheet> {
     }
   }
 
+  Future<bool?> _perguntarMesclarOuSubstituir() async {
+    if (!mounted) return null;
+    return await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text(t('Como deseja importar este backup?')),
+        content: Text(
+          t('Mesclar adiciona os itens do arquivo sem apagar os seus dados atuais. Substituir restaura o backup por completo.'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, null),
+            child: Text(t('Cancelar')),
+          ),
+          OutlinedButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: Text(t('Substituir Tudo')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(c, true),
+            child: Text(t('Mesclar')),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _salvar() async {
     if (_filtro == 'custom') {
       int? val = int.tryParse(_customCtrl.text.trim());
@@ -1337,6 +1620,10 @@ class _SettingsSheetState extends State<SettingsSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final String activeStudyKey = _modoTemaLivre && _temaLivreSelecionado.isNotEmpty
+        ? 'tema:$_temaLivreSelecionado'
+        : _idiomaSelecionado;
+
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.only(
@@ -1370,7 +1657,13 @@ class _SettingsSheetState extends State<SettingsSheet> {
                   selected: {_modoTemaLivre},
                   onSelectionChanged: (Set<bool> newSelection) async {
                     bool isFree = newSelection.first;
-                    setState(() => _modoTemaLivre = isFree);
+                    setState(() {
+                      _modoTemaLivre = isFree;
+                      if (isFree) {
+                        // Desativa por padrão o sorteio automático ao mudar para Estudo Livre
+                        _isAutoNext = false;
+                      }
+                    });
                     if (isFree && _temasLivres.isEmpty) {
                       await _criarNovoTemaDialog();
                     }
@@ -1488,7 +1781,12 @@ class _SettingsSheetState extends State<SettingsSheet> {
                 title: Text(t("Sorteio Automático após Responder")),
                 subtitle: Text(t("Desative para avançar manualmente no seu ritmo"), style: const TextStyle(fontSize: 12)),
                 value: _isAutoNext,
-                onChanged: (val) => setState(() => _isAutoNext = val),
+                onChanged: (val) async {
+                  setState(() => _isAutoNext = val);
+                  if (val) {
+                    await _mostrarAvisoSorteioAutomatico();
+                  }
+                },
               ),
 
               const Divider(height: 30),
@@ -1538,12 +1836,14 @@ class _SettingsSheetState extends State<SettingsSheet> {
                   ),
                 )
               else
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  alignment: WrapAlignment.center,
                   children: [
                     ElevatedButton.icon(
                       icon: const Icon(Icons.upload_file),
-                      label: Text(t("Exportar")),
+                      label: Text(t("Exportar Tudo")),
                       onPressed: () async {
                         setState(() => _isBusyBackup = true);
                         await DatabaseHelper.instance.exportarBackup();
@@ -1551,25 +1851,46 @@ class _SettingsSheetState extends State<SettingsSheet> {
                       },
                     ),
                     ElevatedButton.icon(
+                      icon: const Icon(Icons.folder_zip_outlined),
+                      label: Text(t("Exportar Tema Atual")),
+                      onPressed: () async {
+                        setState(() => _isBusyBackup = true);
+                        bool ok = await DatabaseHelper.instance.exportarTemaAtual(activeStudyKey);
+                        if (!context.mounted) return;
+                        setState(() => _isBusyBackup = false);
+                        if (!ok) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(t('Sua biblioteca está vazia!')), backgroundColor: Colors.orange),
+                          );
+                        }
+                      },
+                    ),
+                    ElevatedButton.icon(
                       icon: const Icon(Icons.download),
                       label: Text(t("Importar")),
                       onPressed: () async {
                         setState(() => _isBusyBackup = true);
-                        bool sucesso = await DatabaseHelper.instance.importarBackup();
-                        if (sucesso) {
+                        String status = await DatabaseHelper.instance.importarBackup(
+                          escolherModoMesclar: _perguntarMesclarOuSubstituir,
+                        );
+                        if (status == 'restaurado' || status == 'deck_mesclado') {
                           await carregarConfiguracoesGlobaisDoBanco();
                         }
                         if (!context.mounted) return;
                         setState(() => _isBusyBackup = false);
-                        if (sucesso) {
+                        if (status == 'restaurado' || status == 'deck_mesclado') {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text(t('Backup importado com sucesso!')),
+                              content: Text(
+                                status == 'deck_mesclado'
+                                    ? t('Itens importados e mesclados com sucesso!')
+                                    : t('Backup importado com sucesso!'),
+                              ),
                               backgroundColor: Colors.green,
                             ),
                           );
                           Navigator.pop(context, true);
-                        } else {
+                        } else if (status == 'erro') {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(t('Nenhum backup selecionado ou falha na importação.')),
