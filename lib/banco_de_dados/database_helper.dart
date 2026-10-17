@@ -972,9 +972,6 @@ class DatabaseHelper {
       }
 
       await database;
-      await _migrarCaminhosDeImagensAntigas();
-      await limparImagensOrfas();
-      await database;
       await updateConfig('tutorial_inicial_concluido', 'true');
       await _migrarCaminhosDeImagensAntigas();
       await limparImagensOrfas();

@@ -88,7 +88,6 @@ Future<void> _verificarNotificacaoProgressoDiario() async {
     final String assinaturaAtual = '${hojeStr}_${acertosHoje}_$registradasHoje';
     final String ultimaAssinatura = await db.getConfig('ultimo_progresso_assinatura');
 
-    // Dispara no primeiro progresso do dia ou quando atinge novos marcos (múltiplos de 5 acertos ou novas palavras)
     final bool atingiuMarco = (acertosHoje == 1 && registradasHoje == 0) ||
         (registradasHoje == 1 && acertosHoje == 0) ||
         (acertosHoje > 0 && acertosHoje % 5 == 0) ||
@@ -156,11 +155,10 @@ Future<void> _checarHorarioLembreteAgora() async {
     final int minutosAgora = agora.hour * 60 + agora.minute;
     final int minutosAlvo = targetHour * 60 + targetMinute;
 
-    // Chave única combinando data + horário configurado (permite testar novos horários no mesmo dia)
     final String chaveDisparo = '${hojeStr}_$horarioConfig';
     final String ultimoDisparo = await db.getConfig('ultimo_lembrete_data');
 
-    if (minutosAgora >= minutosAlvo && minutosAgora <= minutosAlvo + 15 && ultimoDisparo != chaveDisparo) {
+    if (minutosAgora >= minutosAlvo && ultimoDisparo != chaveDisparo) {
       await db.updateConfig('ultimo_lembrete_data', chaveDisparo);
       await dispararNotificacaoCompleta(
         id: 777,
@@ -193,7 +191,6 @@ class _TelaTutorialInicialState extends State<TelaTutorialInicial> {
     await solicitarPermissaoNotificacaoNativa();
 
     if (iniciarTourGuiado) {
-      // Inicia o passo a passo interativo sobre as telas reais do app
       appActiveTutorialSection.value = 'completo';
     } else {
       appActiveTutorialSection.value = null;
@@ -417,7 +414,7 @@ class _TutorialGuiadoOverlayState extends State<TutorialGuiadoOverlay> {
         title: '📝 Cadastrar Palavras ou Conceitos',
         description:
         'Aqui na aba "Novo" você alimenta a sua biblioteca:\n'
-            '• Digite a palavra no idioma de estudo e toque no ícone do Google Tradutor (🌐) à direita do campo para preencher a tradução automaticamente.\n'
+            '• Digite a palavra no idioma de estudo, toque no alto-falante (🔊) para ouvir a pronúncia ou no ícone do Google Tradutor (🌐) para traduzir automaticamente.\n'
             '• Se estiver no modo "Estudo Livre" (ex: Anatomia, Direito), você cadastra o Objeto de Estudo e a sua Explicação detalhada.',
         gestureHint: '💡 Dica: Se cadastrar uma palavra que já existe, o app pergunta se deseja adicionar um novo significado a ela!',
         icon: Icons.add_circle_outline,
@@ -589,7 +586,6 @@ class _TutorialGuiadoOverlayState extends State<TutorialGuiadoOverlay> {
       child: SafeArea(
         child: Stack(
           children: [
-            // Permite fechar tocando no botão Pular, mas mantém a visualização clara da tela atrás
             Align(
               alignment: step.showAtTop ? Alignment.topCenter : Alignment.bottomCenter,
               child: Container(
@@ -948,7 +944,6 @@ class _LembreteConfigWidgetState extends State<LembreteConfigWidget> {
     await db.updateConfig('notificacoes_silenciadas', _notifSilenciadas.toString());
     await db.updateConfig('lembrete_horario', _horarioSelecionado);
     await db.updateConfig('lembrete_dias', _diasSelecionados.join(','));
-    // Reseta trava caso o usuário tenha mudado de horário para testar no mesmo dia
     await db.updateConfig('ultimo_lembrete_data', '');
 
     if (_lembreteAtivo && !_notifSilenciadas) {
@@ -1052,30 +1047,6 @@ class _LembreteConfigWidgetState extends State<LembreteConfigWidget> {
                 },
               );
             }),
-          ),
-          const SizedBox(height: 10),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              icon: const Icon(Icons.notifications_active, size: 18),
-              label: const Text('Testar Notificação no Celular Agora'),
-              onPressed: () async {
-                await solicitarPermissaoNotificacaoNativa();
-                await dispararNotificacaoCompleta(
-                  id: 999,
-                  titulo: '⏰ Hora de treinar!',
-                  mensagem: 'Teste de lembrete ativo! Suas notificações estão funcionando perfeitamente no aparelho 🔥.',
-                  tipo: 'lembrete',
-                );
-                if (!context.mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Notificação enviada! Verifique a barra superior do seu celular 🔔.'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              },
-            ),
           ),
         ],
       ],
