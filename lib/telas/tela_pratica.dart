@@ -99,6 +99,9 @@ class _PracticeTabState extends State<PracticeTab> {
     _speech = stt.SpeechToText();
     _loadSettings();
     appNavigateToPracticePage.addListener(_onExternalPracticePageRequest);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _onExternalPracticePageRequest();
+    });
 
     _parrotCustomCtrl.addListener(() {
       _parrotCustomVal = _parrotCustomCtrl.text.trim();

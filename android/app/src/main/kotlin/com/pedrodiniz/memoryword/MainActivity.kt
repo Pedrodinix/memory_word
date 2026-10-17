@@ -147,13 +147,9 @@ object NotificationHelper {
             target.add(Calendar.DAY_OF_YEAR, 1)
         }
 
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, target.timeInMillis, pendingIntent)
-            } else {
-                alarmManager.setExact(AlarmManager.RTC_WAKEUP, target.timeInMillis, pendingIntent)
-            }
-        } catch (e: SecurityException) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, target.timeInMillis, pendingIntent)
+        } else {
             alarmManager.set(AlarmManager.RTC_WAKEUP, target.timeInMillis, pendingIntent)
         }
     }
@@ -184,7 +180,6 @@ class ReminderReceiver : BroadcastReceiver() {
         val title = prefs.getString("title", "⏰ Hora de treinar!") ?: "⏰ Hora de treinar!"
         val body = prefs.getString("body", "O seu momento de memorização diária chegou!") ?: ""
 
-        // Converte Calendar.DAY_OF_WEEK (Dom=1..Sáb=7) para ISO (Seg=1..Dom=7)
         val calDay = Calendar.getInstance().get(Calendar.DAY_OF_WEEK)
         val isoDay = if (calDay == Calendar.SUNDAY) 7 else calDay - 1
 
@@ -193,7 +188,6 @@ class ReminderReceiver : BroadcastReceiver() {
             NotificationHelper.showSystemNotification(context, 777, title, body)
         }
 
-        // Reagenda para o dia seguinte
         NotificationHelper.scheduleNextAlarm(context, hour, minute)
     }
 }
